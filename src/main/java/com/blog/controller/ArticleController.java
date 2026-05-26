@@ -31,19 +31,11 @@ public class ArticleController {
 
     @GetMapping("/{id}")
     public Result<Article> getById(@PathVariable Long id) {
-        Article article = articleService.getById(id);
-        if (article == null) {
-            throw new RuntimeException("Article not found: " + id);
-        }
-        return Result.ok(article);
+        return Result.ok(articleService.getById(id));
     }
 
     @PutMapping("/{id}")
     public Result<Article> update(@PathVariable Long id, @RequestBody Article article) {
-        Article existing = articleService.getById(id);
-        if (existing == null) {
-            throw new RuntimeException("Article not found: " + id);
-        }
         article.setId(id);
         articleService.updateById(article);
         return Result.ok(articleService.getById(id));
@@ -56,10 +48,6 @@ public class ArticleController {
 
     @DeleteMapping("/{id}")
     public Result<Void> delete(@PathVariable Long id) {
-        Article existing = articleService.getById(id);
-        if (existing == null) {
-            throw new RuntimeException("Article not found: " + id);
-        }
         articleService.removeById(id);
         return Result.ok();
     }

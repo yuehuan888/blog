@@ -20,5 +20,22 @@ mybatis-plus:
       logic-delete-value: 1
       logic-not-delete-value: 0
 
+  data:
+    redis:
+      host: localhost
+      port: 6379
+      password:
+      timeout: 3s
+  cache:
+    type: redis
+    redis:
+      time-to-live: 30m
+
+  rabbitmq:
+    host: localhost
+    port: 5672
+    username: guest
+    password: guest
+
 server:
   port: 8080

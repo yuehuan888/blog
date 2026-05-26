@@ -9,14 +9,68 @@ import com.blog.dto.ArticleQueryDTO;
 import com.blog.entity.Article;
 import com.blog.mapper.ArticleMapper;
 import com.blog.service.ArticleService;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.amqp.rabbit.core.RabbitTemplate;
+import org.springframework.cache.annotation.CacheEvict;
+import org.springframework.cache.annotation.Cacheable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.io.Serializable;
+import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Map;
 
 @Service
 public class ArticleServiceImpl extends ServiceImpl<ArticleMapper, Article> implements ArticleService {
+
+    private static final Logger log = LoggerFactory.getLogger(ArticleServiceImpl.class);
+
+    private final RabbitTemplate rabbitTemplate;
+
+    public ArticleServiceImpl(RabbitTemplate rabbitTemplate) {
+        this.rabbitTemplate = rabbitTemplate;
+    }
+
+    @Override
+    @Cacheable(value = "article", key = "#id")
+    public Article getById(Serializable id) {
+        Article article = super.getById(id);
+        if (article == null) {
+            throw new RuntimeException("Article not found: " + id);
+        }
+        return article;
+    }
+
+    @Override
+    @Transactional
+    @CacheEvict(value = "categoryStats", allEntries = true)
+    public boolean save(Article entity) {
+        boolean result = super.save(entity);
+        sendEvent("created", entity);
+        return result;
+    }
+
+    @Override
+    @Transactional
+    @CacheEvict(value = {"article", "categoryStats"}, key = "#entity.id")
+    public boolean updateById(Article entity) {
+        getById(entity.getId()); // ensure exists
+        boolean result = super.updateById(entity);
+        sendEvent("updated", entity);
+        return result;
+    }
+
+    @Override
+    @Transactional
+    @CacheEvict(value = {"article", "categoryStats"}, key = "#id")
+    public boolean removeById(Serializable id) {
+        Article article = getById(id); // ensure exists
+        boolean result = super.removeById(id);
+        sendEvent("deleted", article);
+        return result;
+    }
 
     @Override
     public IPage<Article> page(ArticleQueryDTO query) {
@@ -41,6 +95,7 @@ public class ArticleServiceImpl extends ServiceImpl<ArticleMapper, Article> impl
 
     @Override
     @Transactional
+    @CacheEvict(value = {"article", "categoryStats"}, key = "#id")
     public Article patch(Long id, Article partial) {
         getById(id); // ensure exists
 
@@ -66,14 +121,32 @@ public class ArticleServiceImpl extends ServiceImpl<ArticleMapper, Article> impl
         }
 
         if (hasUpdate) {
-            wrapper.set(Article::getUpdatedAt, java.time.LocalDateTime.now());
+            wrapper.set(Article::getUpdatedAt, LocalDateTime.now());
             baseMapper.update(wrapper);
         }
-        return getById(id);
+
+        Article updated = super.getById(id);
+        sendEvent("updated", updated);
+        return updated;
     }
 
     @Override
+    @Cacheable(value = "categoryStats")
     public List<Map<String, Object>> categoryStatistics() {
         return baseMapper.countByCategory();
+    }
+
+    private void sendEvent(String type, Article article) {
+        try {
+            Map<String, Object> event = Map.of(
+                    "type", type,
+                    "articleId", article.getId(),
+                    "title", article.getTitle(),
+                    "timestamp", LocalDateTime.now().toString()
+            );
+            rabbitTemplate.convertAndSend("blog.exchange", "blog.article." + type, event);
+        } catch (Exception e) {
+            log.error("Failed to send RabbitMQ event: type={}, articleId={}", type, article.getId(), e);
+        }
     }
 }
