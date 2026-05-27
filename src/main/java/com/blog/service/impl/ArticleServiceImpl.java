@@ -9,16 +9,18 @@ import com.blog.dto.ArticleQueryDTO;
 import com.blog.entity.Article;
 import com.blog.mapper.ArticleMapper;
 import com.blog.service.ArticleService;
+import com.fasterxml.jackson.databind.JavaType;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.amqp.rabbit.core.RabbitTemplate;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.cache.annotation.CacheEvict;
-import org.springframework.cache.annotation.Cacheable;
+import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.io.Serializable;
+import java.time.Duration;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Map;
@@ -28,44 +30,64 @@ public class ArticleServiceImpl extends ServiceImpl<ArticleMapper, Article> impl
 
     private static final Logger log = LoggerFactory.getLogger(ArticleServiceImpl.class);
 
+    private static final String CACHE_ARTICLE = "article::";
+    private static final String CACHE_CATEGORY_STATS = "categoryStats";
+    private static final Duration CACHE_TTL = Duration.ofMinutes(30);
+
+    @Autowired(required = false)
+    private StringRedisTemplate redisTemplate;
+
     @Autowired(required = false)
     private RabbitTemplate rabbitTemplate;
 
+    @Autowired
+    private ObjectMapper objectMapper;
+
     @Override
-    @Cacheable(value = "article", key = "#id")
     public Article getById(Serializable id) {
+        String key = CACHE_ARTICLE + id;
+        Article cached = getCache(key, Article.class);
+        if (cached != null) {
+            log.debug("Cache hit: {}", key);
+            return cached;
+        }
+
         Article article = super.getById(id);
         if (article == null) {
             throw new RuntimeException("Article not found: " + id);
         }
+
+        setCache(key, article);
         return article;
     }
 
     @Override
     @Transactional
-    @CacheEvict(value = "categoryStats", allEntries = true)
     public boolean save(Article entity) {
         boolean result = super.save(entity);
+        deleteCache(CACHE_CATEGORY_STATS);
         sendEvent("created", entity);
         return result;
     }
 
     @Override
     @Transactional
-    @CacheEvict(value = {"article", "categoryStats"}, key = "#entity.id")
     public boolean updateById(Article entity) {
         getById(entity.getId());
         boolean result = super.updateById(entity);
+        deleteCache(CACHE_ARTICLE + entity.getId());
+        deleteCache(CACHE_CATEGORY_STATS);
         sendEvent("updated", entity);
         return result;
     }
 
     @Override
     @Transactional
-    @CacheEvict(value = {"article", "categoryStats"}, key = "#id")
     public boolean removeById(Serializable id) {
         Article article = getById(id);
         boolean result = super.removeById(id);
+        deleteCache(CACHE_ARTICLE + id);
+        deleteCache(CACHE_CATEGORY_STATS);
         sendEvent("deleted", article);
         return result;
     }
@@ -93,7 +115,6 @@ public class ArticleServiceImpl extends ServiceImpl<ArticleMapper, Article> impl
 
     @Override
     @Transactional
-    @CacheEvict(value = {"article", "categoryStats"}, key = "#id")
     public Article patch(Long id, Article partial) {
         getById(id);
 
@@ -124,15 +145,72 @@ public class ArticleServiceImpl extends ServiceImpl<ArticleMapper, Article> impl
         }
 
         Article updated = super.getById(id);
+        deleteCache(CACHE_ARTICLE + id);
+        deleteCache(CACHE_CATEGORY_STATS);
         sendEvent("updated", updated);
         return updated;
     }
 
     @Override
-    @Cacheable(value = "categoryStats")
     public List<Map<String, Object>> categoryStatistics() {
-        return baseMapper.countByCategory();
+        List<Map<String, Object>> cached = getCache(CACHE_CATEGORY_STATS, listMapType());
+        if (cached != null) {
+            return cached;
+        }
+
+        List<Map<String, Object>> stats = baseMapper.countByCategory();
+        setCache(CACHE_CATEGORY_STATS, stats);
+        return stats;
     }
+
+    // ==================== 缓存工具方法 ====================
+
+    private <T> T getCache(String key, Class<T> clazz) {
+        if (redisTemplate == null) return null;
+        try {
+            String json = redisTemplate.opsForValue().get(key);
+            return json != null ? objectMapper.readValue(json, clazz) : null;
+        } catch (Exception e) {
+            log.warn("Failed to read cache: key={}", key, e);
+            return null;
+        }
+    }
+
+    private <T> T getCache(String key, JavaType type) {
+        if (redisTemplate == null) return null;
+        try {
+            String json = redisTemplate.opsForValue().get(key);
+            return json != null ? objectMapper.readValue(json, type) : null;
+        } catch (Exception e) {
+            log.warn("Failed to read cache: key={}", key, e);
+            return null;
+        }
+    }
+
+    private void setCache(String key, Object value) {
+        if (redisTemplate == null) return;
+        try {
+            String json = objectMapper.writeValueAsString(value);
+            redisTemplate.opsForValue().set(key, json, CACHE_TTL);
+        } catch (Exception e) {
+            log.warn("Failed to write cache: key={}", key, e);
+        }
+    }
+
+    private void deleteCache(String key) {
+        if (redisTemplate == null) return;
+        try {
+            redisTemplate.delete(key);
+        } catch (Exception e) {
+            log.warn("Failed to delete cache: key={}", key, e);
+        }
+    }
+
+    private JavaType listMapType() {
+        return objectMapper.getTypeFactory().constructCollectionType(List.class, Map.class);
+    }
+
+    // ==================== MQ 事件 ====================
 
     private void sendEvent(String type, Article article) {
         if (rabbitTemplate == null) {
