@@ -1,6 +1,6 @@
 spring:
   datasource:
-    url: jdbc:mysql://localhost:3306/blog?useUnicode=true&characterEncoding=utf-8&serverTimezone=Asia/Shanghai
+    url: jdbc:mysql://localhost:3306/blogsystem?useUnicode=true&characterEncoding=utf-8&serverTimezone=Asia/Shanghai
     username: root
     password: 123456
     driver-class-name: com.mysql.cj.jdbc.Driver
@@ -8,6 +8,27 @@ spring:
     init:
       mode: always
       schema-locations: classpath:schema.sql
+  cache:
+    type: simple
+  autoconfigure:
+    exclude:
+      - org.springframework.boot.autoconfigure.amqp.RabbitAutoConfiguration
+
+# 本地没有 Redis/RabbitMQ 时已做降级：
+#   - 缓存使用内存版 (type: simple)
+#   - RabbitMQ 自动配置已排除
+# 如果需要启用 Redis，取消下面注释并把 cache.type 改为 redis：
+#  data:
+#    redis:
+#      host: localhost
+#      port: 6379
+#      timeout: 3s
+# 如果需要启用 RabbitMQ，删除上面的 autoconfigure.exclude 并取消下面注释：
+#  rabbitmq:
+#    host: localhost
+#    port: 5672
+#    username: guest
+#    password: guest
 
 mybatis-plus:
   configuration:
@@ -19,23 +40,6 @@ mybatis-plus:
       logic-delete-field: deleted
       logic-delete-value: 1
       logic-not-delete-value: 0
-
-  data:
-    redis:
-      host: localhost
-      port: 6379
-      password:
-      timeout: 3s
-  cache:
-    type: redis
-    redis:
-      time-to-live: 30m
-
-  rabbitmq:
-    host: localhost
-    port: 5672
-    username: guest
-    password: guest
 
 server:
   port: 8080

@@ -12,6 +12,7 @@ import com.blog.service.ArticleService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.amqp.rabbit.core.RabbitTemplate;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.cache.annotation.CacheEvict;
 import org.springframework.cache.annotation.Cacheable;
 import org.springframework.stereotype.Service;
@@ -27,11 +28,8 @@ public class ArticleServiceImpl extends ServiceImpl<ArticleMapper, Article> impl
 
     private static final Logger log = LoggerFactory.getLogger(ArticleServiceImpl.class);
 
-    private final RabbitTemplate rabbitTemplate;
-
-    public ArticleServiceImpl(RabbitTemplate rabbitTemplate) {
-        this.rabbitTemplate = rabbitTemplate;
-    }
+    @Autowired(required = false)
+    private RabbitTemplate rabbitTemplate;
 
     @Override
     @Cacheable(value = "article", key = "#id")
@@ -56,7 +54,7 @@ public class ArticleServiceImpl extends ServiceImpl<ArticleMapper, Article> impl
     @Transactional
     @CacheEvict(value = {"article", "categoryStats"}, key = "#entity.id")
     public boolean updateById(Article entity) {
-        getById(entity.getId()); // ensure exists
+        getById(entity.getId());
         boolean result = super.updateById(entity);
         sendEvent("updated", entity);
         return result;
@@ -66,7 +64,7 @@ public class ArticleServiceImpl extends ServiceImpl<ArticleMapper, Article> impl
     @Transactional
     @CacheEvict(value = {"article", "categoryStats"}, key = "#id")
     public boolean removeById(Serializable id) {
-        Article article = getById(id); // ensure exists
+        Article article = getById(id);
         boolean result = super.removeById(id);
         sendEvent("deleted", article);
         return result;
@@ -97,7 +95,7 @@ public class ArticleServiceImpl extends ServiceImpl<ArticleMapper, Article> impl
     @Transactional
     @CacheEvict(value = {"article", "categoryStats"}, key = "#id")
     public Article patch(Long id, Article partial) {
-        getById(id); // ensure exists
+        getById(id);
 
         LambdaUpdateWrapper<Article> wrapper = new LambdaUpdateWrapper<>();
         wrapper.eq(Article::getId, id);
@@ -137,6 +135,9 @@ public class ArticleServiceImpl extends ServiceImpl<ArticleMapper, Article> impl
     }
 
     private void sendEvent(String type, Article article) {
+        if (rabbitTemplate == null) {
+            return;
+        }
         try {
             Map<String, Object> event = Map.of(
                     "type", type,
