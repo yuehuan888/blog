@@ -157,7 +157,6 @@ public class ArticleServiceImpl extends ServiceImpl<ArticleMapper, Article> impl
         if (cached != null) {
             return cached;
         }
-
         List<Map<String, Object>> stats = baseMapper.countByCategory();
         setCache(CACHE_CATEGORY_STATS, stats);
         return stats;
