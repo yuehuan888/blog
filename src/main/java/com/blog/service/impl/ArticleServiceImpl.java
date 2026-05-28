@@ -22,6 +22,7 @@ import org.springframework.transaction.annotation.Transactional;
 import java.io.Serializable;
 import java.time.Duration;
 import java.time.LocalDateTime;
+import java.util.Collection;
 import java.util.List;
 import java.util.Map;
 
@@ -42,6 +43,13 @@ public class ArticleServiceImpl extends ServiceImpl<ArticleMapper, Article> impl
 
     @Autowired
     private ObjectMapper objectMapper;
+
+    @Override
+    public boolean saveBatch(Collection<Article> entityList) {
+        boolean result = super.saveBatch(entityList);
+        deleteCache(CACHE_CATEGORY_STATS);
+        return result;
+    }
 
     @Override
     public Article getById(Serializable id) {

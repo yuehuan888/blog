@@ -23,6 +23,11 @@ public class ArticleController {
         articleService.save(article);
         return Result.ok(article);
     }
+    @PostMapping("/batch")
+    public Result<Void> createBatch(@RequestBody List<Article> articles) {
+        boolean result = articleService.saveBatch(articles);
+        return result ? Result.ok() : Result.fail(400, "插入失败");
+    }
 
     @GetMapping
     public Result<IPage<Article>> list(ArticleQueryDTO query) {
@@ -49,6 +54,11 @@ public class ArticleController {
     @DeleteMapping("/{id}")
     public Result<Void> delete(@PathVariable Long id) {
         articleService.removeById(id);
+        return Result.ok();
+    }
+    @DeleteMapping
+    public Result<Void> deleteBatch(@RequestParam List<Long> ids){
+        articleService.removeByIds(ids);
         return Result.ok();
     }
 
