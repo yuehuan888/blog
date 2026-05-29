@@ -20,6 +20,10 @@ public class Article {
 
     private String status;
 
+    private Integer likeCount;
+
+    private Integer favoriteCount;
+
     @TableField(fill = FieldFill.INSERT)
     private LocalDateTime createdAt;
 
