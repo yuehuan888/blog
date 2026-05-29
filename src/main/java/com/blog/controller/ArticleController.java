@@ -2,12 +2,15 @@ package com.blog.controller;
 
 import com.baomidou.mybatisplus.core.metadata.IPage;
 import com.blog.dto.ArticleQueryDTO;
+import com.blog.dto.HotArticleDTO;
 import com.blog.dto.Result;
 import com.blog.dto.ToggleResult;
 import com.blog.entity.Article;
 import com.blog.service.ArticleFavoriteService;
 import com.blog.service.ArticleLikeService;
+import com.blog.service.ArticleReadService;
 import com.blog.service.ArticleService;
+import jakarta.servlet.http.HttpServletRequest;
 import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.*;
 
@@ -23,6 +26,7 @@ public class ArticleController {
     private final ArticleService articleService;
     private final ArticleLikeService articleLikeService;
     private final ArticleFavoriteService articleFavoriteService;
+    private final ArticleReadService articleReadService;
 
     @PostMapping
     public Result<Article> create(@RequestBody Article article) {
@@ -41,8 +45,12 @@ public class ArticleController {
     }
 
     @GetMapping("/{id}")
-    public Result<Article> getById(@PathVariable Long id) {
-        return Result.ok(articleService.getById(id));
+    public Result<Article> getById(@PathVariable Long id,
+                                    @RequestHeader(value = "X-User-Id", defaultValue = "1") Long userId,
+                                    HttpServletRequest request) {
+        Article article = articleService.getById(id);
+        articleReadService.recordRead(id, userId, request.getRemoteAddr());
+        return Result.ok(article);
     }
 
     @PutMapping("/{id}")
@@ -91,7 +99,14 @@ public class ArticleController {
         Map<String, Integer> stats = new HashMap<>();
         stats.put("likeCount", article.getLikeCount());
         stats.put("favoriteCount", article.getFavoriteCount());
-        stats.put("readCount", 0);
+        stats.put("readCount", article.getReadCount());
         return Result.ok(stats);
+    }
+
+    @GetMapping("/hot")
+    public Result<IPage<HotArticleDTO>> hot(@RequestParam(defaultValue = "7") int days,
+                                             @RequestParam(defaultValue = "1") int page,
+                                             @RequestParam(defaultValue = "10") int size) {
+        return Result.ok(articleReadService.getHotArticles(days, page, size));
     }
 }

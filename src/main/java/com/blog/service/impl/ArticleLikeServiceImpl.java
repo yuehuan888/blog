@@ -79,7 +79,6 @@ public class ArticleLikeServiceImpl implements ArticleLikeService {
         } catch (Exception e) {
             log.warn("Failed to update Redis: articleId={}, userId={}", articleId, userId);
         }
-
         ArticleLike record = new ArticleLike();
         record.setUserId(userId);
         record.setArticleId(articleId);

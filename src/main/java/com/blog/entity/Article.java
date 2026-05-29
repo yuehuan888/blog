@@ -24,6 +24,8 @@ public class Article {
 
     private Integer favoriteCount;
 
+    private Integer readCount;
+
     @TableField(fill = FieldFill.INSERT)
     private LocalDateTime createdAt;
 

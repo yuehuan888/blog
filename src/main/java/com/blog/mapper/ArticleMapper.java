@@ -28,4 +28,10 @@ public interface ArticleMapper extends BaseMapper<Article> {
 
     @Update("UPDATE article SET favorite_count = favorite_count - 1 WHERE id = #{id} AND favorite_count > 0")
     int decrementFavoriteCount(@Param("id") Long id);
+
+    @Update("UPDATE article SET read_count = read_count + 1 WHERE id = #{id}")
+    int incrementReadCount(@Param("id") Long id);
+
+    @Select("<script>SELECT * FROM article WHERE id IN <foreach item='id' collection='ids' open='(' separator=',' close=')'>#{id}</foreach></script>")
+    List<Article> selectByIds(@Param("ids") List<Long> ids);
 }
