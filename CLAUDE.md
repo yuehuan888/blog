@@ -27,15 +27,16 @@ mvn test -f pom.xml -Dspring.profiles.active=test
 
 ```
 com.blog
-├── entity/          # 实体类，映射 article 表
-├── mapper/          # Mapper 接口，继承 BaseMapper<Article>
-├── service/         # 接口继承 IService<Article>，只声明自定义方法
-├── service/impl/    # 实现继承 ServiceImpl<ArticleMapper, Article>
-├── controller/      # REST 控制器
-├── dto/             # 查询 DTO、统一响应 Result<T>
-├── config/          # MyBatisPlusConfig（分页插件）、RabbitMQConfig（条件加载）
-├── handler/         # MyMetaObjectHandler（自动填充时间）、GlobalExceptionHandler
-└── event/           # ArticleEventListener（条件加载）
+├── entity/          # 4 个实体：Article, ArticleLike, ArticleFavorite, ArticleRead
+├── mapper/          # 4 个 Mapper，继承 BaseMapper，自定义 SQL 用注解
+├── service/         # 4 个 Service 接口
+├── service/impl/    # 4 个 Service 实现，继承 ServiceImpl<Mapper, Entity>
+├── controller/      # ArticleController（13 个端点）
+├── dto/             # Result<T>, ArticleQueryDTO, ToggleResult, HotArticleDTO
+├── config/          # MyBatisPlusConfig, RabbitMQConfig(条件), AsyncConfig
+├── handler/         # MyMetaObjectHandler, GlobalExceptionHandler
+├── event/           # ArticleEventListener(MQ), ArticleReadEventListener(@Async), ReadEvent
+└── task/            # HotArticleScheduler（定时重建热榜 ZSET）
 ```
 
 ## 关键设计决策
@@ -63,6 +64,29 @@ com.blog
 - `RabbitMQConfig` 和 `ArticleEventListener` 用 `@ConditionalOnProperty(name = "app.rabbitmq-enabled")` 条件加载
 - `RabbitTemplate` 注入为 `@Autowired(required = false)`，为 null 时 `sendEvent()` 静默跳过
 
+### 点赞/收藏：Redis Set + DB 双写
+
+- Redis Set `article:like:{id}` / `article:favorite:{id}` 存储 userId 字符串，O(1) 判断状态
+- Toggle 模式：`SISMEMBER` 查 → `SADD` + DB 插 + 计数 +1（点赞）或 `SREM` + DB 删 + 计数 -1（取消）
+- 降级：Redis 不可用时 catch 异常走 DB 查询 `article_like`/`article_favorite` 表
+- 原子计数：`ArticleMapper` 的 `@Update` SQL 直接 `SET like_count = like_count +/- 1`
+- `@Transactional` 保证 DB 记录 + 计数的原子性
+
+### 阅读统计：去重 + ZSET + 异步事件
+
+- **去重**：`SET NX EX 1800` → key=`article:read:{articleId}:{userId}`（同一用户 30min 内不重复计数）
+- **热榜 ZSET**：去重通过后 `ZINCRBY article:hot:7` / `article:hot:30`
+- **异步持久化**：`ApplicationEventPublisher.publishEvent(ReadEvent)` → `@Async("readTaskExecutor")` + `@TransactionalEventListener(AFTER_COMMIT)` → 写 `article_read` 表 + `UPDATE article SET read_count = read_count + 1`
+- **热门查询**：`ZREVRANGE article:hot:{days}` 分页取 ID → `ArticleMapper.selectByIds` 批量查文章；Redis 不可用时降级 DB `COUNT(*) ... GROUP BY article_id`
+- 去重和 ZSET 操作同步（不阻塞主响应），DB 写异步；Redis 不可用时跳过去重和 ZSET 更新
+
+### 定时任务：HotArticleScheduler
+
+- `@Scheduled(cron = "0 0 * * * ?")` 每小时整点执行
+- 从 `article_read` 表聚合近 N 天数据（`countReadsByArticleInRange`）
+- `ZADD` 全量重建 `article:hot:7` / `article:hot:30`，TTL 2h（校正实时 ZINCRBY 的偏差）
+- Redis 不可用时静默跳过
+
 ### MyBatis-Plus 配置
 
 - 分页插件：`PaginationInnerInterceptor(DbType.MYSQL)`
@@ -72,17 +96,39 @@ com.blog
 
 ## REST API 端点
 
-所有接口统一返回 `Result<T>`（code + message + data）。
+所有接口统一返回 `Result<T>`（code + message + data）。用户身份通过请求头 `X-User-Id` 传入（默认值 1）。
 
 | 方法 | 路径 | 说明 |
 |------|------|------|
 | POST | `/api/articles` | 创建文章 |
+| POST | `/api/articles/batch` | 批量创建 |
 | GET | `/api/articles?page=&size=&category=&status=&keyword=` | 分页查询 |
-| GET | `/api/articles/{id}` | 查单篇 |
+| GET | `/api/articles/{id}` | 查单篇（自动触发阅读记录） |
 | PUT | `/api/articles/{id}` | 完整更新 |
 | PATCH | `/api/articles/{id}` | 部分更新 |
 | DELETE | `/api/articles/{id}` | 删除 |
+| DELETE | `/api/articles?ids=1,2,3` | 批量删除 |
 | GET | `/api/articles/statistics/category` | 分类文章数量统计 |
+| POST | `/api/articles/{id}/like` | 点赞/取消点赞（toggle，Header: X-User-Id） |
+| POST | `/api/articles/{id}/favorite` | 收藏/取消收藏（toggle，Header: X-User-Id） |
+| GET | `/api/articles/{id}/stats` | 文章统计（likeCount, favoriteCount, readCount） |
+| GET | `/api/articles/hot?days=7&page=1&size=10` | 热门文章排行 |
+
+## Redis Key 设计总览
+
+| Key | 类型 | 用途 | TTL |
+|-----|------|------|-----|
+| `article::{id}` | String (JSON) | 文章缓存 | 30 min |
+| `categoryStats` | String (JSON) | 分类统计缓存 | 30 min |
+| `article:like:{id}` | Set | 点赞用户集合 (userId) | 无 |
+| `article:favorite:{id}` | Set | 收藏用户集合 (userId) | 无 |
+| `article:read:{id}:{userId}` | String | 阅读去重标记 | 30 min |
+| `article:hot:7` | ZSET | 7 天热榜 (articleId → readCount) | 2 h |
+| `article:hot:30` | ZSET | 30 天热榜 (articleId → readCount) | 2 h |
+
+## 数据库表
+
+4 张表：`article`（含 like_count / favorite_count / read_count）、`article_like`、`article_favorite`、`article_read`。Schema 定义见 `src/main/resources/schema.sql`。
 
 ## 本地开发环境切换
 

@@ -49,7 +49,6 @@ public class HotArticleScheduler {
                 int count = ((Number) row.get("cnt")).intValue();
                 redisTemplate.opsForZSet().add(key, articleId.toString(), count);
             }
-
             redisTemplate.expire(key, ttlHours, TimeUnit.HOURS);
             log.info("Rebuilt ZSET {}: {} entries, TTL={}h", key, rows.size(), ttlHours);
         } catch (Exception e) {

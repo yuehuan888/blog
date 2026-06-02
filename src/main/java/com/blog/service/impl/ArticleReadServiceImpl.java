@@ -62,13 +62,11 @@ public class ArticleReadServiceImpl implements ArticleReadService {
             log.debug("Dedup hit: articleId={}, userId={} (within 30min)", articleId, userId);
             return;
         }
-
         try {
             incrementHotZsets(articleId);
         } catch (Exception e) {
             log.warn("Failed to update hot ZSET: articleId={}", articleId, e);
         }
-
         eventPublisher.publishEvent(new ReadEvent(articleId, userId, ip));
     }
 
