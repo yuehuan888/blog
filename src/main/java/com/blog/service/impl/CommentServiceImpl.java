@@ -10,6 +10,7 @@ import com.blog.mapper.ArticleMapper;
 import com.blog.mapper.CommentLikeMapper;
 import com.blog.mapper.CommentMapper;
 import com.blog.service.CommentService;
+import com.blog.util.AuthContext;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -45,7 +46,7 @@ public class CommentServiceImpl implements CommentService {
 
     @Override
     @Transactional
-    public Comment create(Long articleId, Long parentId, Long replyTo, String content, Long userId) {
+    public Comment create(Long articleId, Long parentId, Long replyTo, String content) {
         if (articleMapper.selectById(articleId) == null) {
             throw new RuntimeException("Article not found: " + articleId);
         }
@@ -56,7 +57,7 @@ public class CommentServiceImpl implements CommentService {
 
         Comment comment = new Comment();
         comment.setArticleId(articleId);
-        comment.setUserId(userId);
+        comment.setUserId(AuthContext.getUserId());
         comment.setParentId(parentId);
         comment.setReplyTo(replyTo);
         comment.setContent(content);
@@ -120,7 +121,8 @@ public class CommentServiceImpl implements CommentService {
 
     @Override
     @Transactional
-    public ToggleResult toggleLike(Long commentId, Long userId) {
+    public ToggleResult toggleLike(Long commentId) {
+        Long userId = AuthContext.getUserId();
         Comment comment = commentMapper.selectById(commentId);
         if (comment == null) {
             throw new RuntimeException("Comment not found: " + commentId);
@@ -143,13 +145,14 @@ public class CommentServiceImpl implements CommentService {
 
     @Override
     @Transactional
-    public void delete(Long commentId, Long userId) {
+    public void delete(Long commentId) {
+        Long userId = AuthContext.getUserId();
         Comment comment = commentMapper.selectById(commentId);
         if (comment == null) {
             throw new RuntimeException("Comment not found: " + commentId);
         }
 
-        if (userId == 1) {
+        if (AuthContext.isAdmin()) {
             hardDeleteRecursive(commentId);
         } else if (comment.getUserId().equals(userId)) {
             comment.setStatus("deleted");
@@ -176,8 +179,8 @@ public class CommentServiceImpl implements CommentService {
 
     @Override
     @Transactional
-    public void hide(Long commentId, Long userId) {
-        if (userId == null || userId != 1) {
+    public void hide(Long commentId) {
+        if (!AuthContext.isAdmin()) {
             throw new RuntimeException("Admin access required");
         }
         Comment comment = commentMapper.selectById(commentId);

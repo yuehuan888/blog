@@ -14,6 +14,7 @@ import com.blog.service.ArticleLikeService;
 import com.blog.service.ArticleReadService;
 import com.blog.service.ArticleService;
 import com.blog.service.ArticleTagService;
+import com.blog.util.AuthContext;
 import jakarta.servlet.http.HttpServletRequest;
 import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.*;
@@ -36,11 +37,16 @@ public class ArticleController {
 
     @PostMapping
     public Result<Article> create(@RequestBody Article article) {
+        article.setAuthorId(AuthContext.getUserId());
         articleService.save(article);
         return Result.ok(article);
     }
+
     @PostMapping("/batch")
     public Result<Void> createBatch(@RequestBody List<Article> articles) {
+        for (Article a : articles) {
+            a.setAuthorId(AuthContext.getUserId());
+        }
         boolean result = articleService.saveBatch(articles);
         return result ? Result.ok() : Result.fail(400, "插入失败");
     }
@@ -51,11 +57,9 @@ public class ArticleController {
     }
 
     @GetMapping("/{id}")
-    public Result<Article> getById(@PathVariable Long id,
-                                    @RequestHeader(value = "X-User-Id", defaultValue = "1") Long userId,
-                                    HttpServletRequest request) {
+    public Result<Article> getById(@PathVariable Long id, HttpServletRequest request) {
         Article article = articleService.getById(id);
-        articleReadService.recordRead(id, userId, request.getRemoteAddr());
+        articleReadService.recordRead(id, AuthContext.getUserId(), request.getRemoteAddr());
         return Result.ok(article);
     }
 
@@ -76,8 +80,9 @@ public class ArticleController {
         articleService.removeById(id);
         return Result.ok();
     }
+
     @DeleteMapping
-    public Result<Void> deleteBatch(@RequestParam List<Long> ids){
+    public Result<Void> deleteBatch(@RequestParam List<Long> ids) {
         articleService.removeByIds(ids);
         return Result.ok();
     }
@@ -88,15 +93,13 @@ public class ArticleController {
     }
 
     @PostMapping("/{id}/like")
-    public Result<ToggleResult> like(@PathVariable Long id,
-                                      @RequestHeader(value = "X-User-Id", defaultValue = "1") Long userId) {
-        return Result.ok(articleLikeService.toggle(id, userId));
+    public Result<ToggleResult> like(@PathVariable Long id) {
+        return Result.ok(articleLikeService.toggle(id, AuthContext.getUserId()));
     }
 
     @PostMapping("/{id}/favorite")
-    public Result<ToggleResult> favorite(@PathVariable Long id,
-                                          @RequestHeader(value = "X-User-Id", defaultValue = "1") Long userId) {
-        return Result.ok(articleFavoriteService.toggle(id, userId));
+    public Result<ToggleResult> favorite(@PathVariable Long id) {
+        return Result.ok(articleFavoriteService.toggle(id, AuthContext.getUserId()));
     }
 
     @GetMapping("/{id}/stats")
@@ -111,10 +114,8 @@ public class ArticleController {
     }
 
     @PutMapping("/{id}/tags")
-    public Result<Void> setTags(@PathVariable Long id,
-                                @RequestBody List<Long> tagIds,
-                                @RequestHeader(value = "X-User-Id", defaultValue = "1") Long userId) {
-        articleTagService.setTags(id, tagIds, userId);
+    public Result<Void> setTags(@PathVariable Long id, @RequestBody List<Long> tagIds) {
+        articleTagService.setTags(id, tagIds);
         return Result.ok();
     }
 
@@ -141,10 +142,8 @@ public class ArticleController {
     }
 
     @PostMapping("/{id}/rollback/{historyId}")
-    public Result<Article> rollback(@PathVariable Long id,
-                                     @PathVariable Long historyId,
-                                     @RequestHeader(value = "X-User-Id", defaultValue = "1") Long userId) {
-        return Result.ok(articleHistoryService.rollback(id, historyId, userId));
+    public Result<Article> rollback(@PathVariable Long id, @PathVariable Long historyId) {
+        return Result.ok(articleHistoryService.rollback(id, historyId));
     }
 
     @GetMapping("/hot")

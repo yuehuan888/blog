@@ -28,6 +28,8 @@ public class Article {
 
     private Integer commentCount;
 
+    private Long authorId;
+
     @TableField(fill = FieldFill.INSERT)
     private LocalDateTime createdAt;
 

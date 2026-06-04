@@ -10,5 +10,5 @@ public interface ArticleHistoryService {
 
     ArticleHistory getDetail(Long historyId);
 
-    Article rollback(Long articleId, Long historyId, Long userId);
+    Article rollback(Long articleId, Long historyId);
 }

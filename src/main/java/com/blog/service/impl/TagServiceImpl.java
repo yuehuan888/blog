@@ -4,6 +4,7 @@ import com.blog.dto.TagCloudItem;
 import com.blog.entity.Tag;
 import com.blog.mapper.TagMapper;
 import com.blog.service.TagService;
+import com.blog.util.AuthContext;
 import com.fasterxml.jackson.databind.JavaType;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.slf4j.Logger;
@@ -37,8 +38,8 @@ public class TagServiceImpl implements TagService {
 
     @Override
     @Transactional
-    public Tag create(String name, Long userId) {
-        requireAdmin(userId);
+    public Tag create(String name) {
+        requireAdmin();
         if (tagMapper.selectByName(name) != null) {
             throw new RuntimeException("Tag name already exists: " + name);
         }
@@ -54,8 +55,8 @@ public class TagServiceImpl implements TagService {
 
     @Override
     @Transactional
-    public Tag update(Long id, String name, Long userId) {
-        requireAdmin(userId);
+    public Tag update(Long id, String name) {
+        requireAdmin();
         Tag tag = getById(id);
         Tag existing = tagMapper.selectByName(name);
         if (existing != null && !existing.getId().equals(id)) {
@@ -71,8 +72,8 @@ public class TagServiceImpl implements TagService {
 
     @Override
     @Transactional
-    public void delete(Long id, Long userId) {
-        requireAdmin(userId);
+    public void delete(Long id) {
+        requireAdmin();
         getById(id);
         tagMapper.deleteById(id);
         deleteCache(CACHE_TAG + id);
@@ -128,8 +129,8 @@ public class TagServiceImpl implements TagService {
 
     // ==================== 管理员校验 ====================
 
-    private void requireAdmin(Long userId) {
-        if (userId == null || userId != 1) {
+    private void requireAdmin() {
+        if (!AuthContext.isAdmin()) {
             throw new RuntimeException("Admin access required");
         }
     }

@@ -7,6 +7,7 @@ import com.blog.entity.ArticleHistory;
 import com.blog.mapper.ArticleHistoryMapper;
 import com.blog.mapper.ArticleMapper;
 import com.blog.service.ArticleHistoryService;
+import com.blog.util.AuthContext;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -58,8 +59,8 @@ public class ArticleHistoryServiceImpl implements ArticleHistoryService {
 
     @Override
     @Transactional
-    public Article rollback(Long articleId, Long historyId, Long userId) {
-        if (userId == null || userId != 1) {
+    public Article rollback(Long articleId, Long historyId) {
+        if (!AuthContext.isAdmin()) {
             throw new RuntimeException("Admin access required");
         }
 

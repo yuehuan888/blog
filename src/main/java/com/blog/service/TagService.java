@@ -7,11 +7,11 @@ import java.util.List;
 
 public interface TagService {
 
-    Tag create(String name, Long userId);
+    Tag create(String name);
 
-    Tag update(Long id, String name, Long userId);
+    Tag update(Long id, String name);
 
-    void delete(Long id, Long userId);
+    void delete(Long id);
 
     Tag getById(Long id);
 

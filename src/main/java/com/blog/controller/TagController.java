@@ -19,23 +19,19 @@ public class TagController {
     private final ArticleTagService articleTagService;
 
     @PostMapping
-    public Result<Tag> create(@RequestBody Tag tag,
-                              @RequestHeader(value = "X-User-Id", defaultValue = "1") Long userId) {
-        return Result.ok(tagService.create(tag.getName(), userId));
+    public Result<Tag> create(@RequestBody Tag tag) {
+        return Result.ok(tagService.create(tag.getName()));
     }
 
     @PutMapping("/{id}")
-    public Result<Tag> update(@PathVariable Long id,
-                              @RequestBody Tag tag,
-                              @RequestHeader(value = "X-User-Id", defaultValue = "1") Long userId) {
-        return Result.ok(tagService.update(id, tag.getName(), userId));
+    public Result<Tag> update(@PathVariable Long id, @RequestBody Tag tag) {
+        return Result.ok(tagService.update(id, tag.getName()));
     }
 
     @DeleteMapping("/{id}")
-    public Result<Void> delete(@PathVariable Long id,
-                               @RequestHeader(value = "X-User-Id", defaultValue = "1") Long userId) {
+    public Result<Void> delete(@PathVariable Long id) {
         articleTagService.deleteByTagId(id);
-        tagService.delete(id, userId);
+        tagService.delete(id);
         return Result.ok();
     }
 

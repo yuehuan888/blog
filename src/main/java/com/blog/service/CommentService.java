@@ -7,15 +7,15 @@ import com.blog.entity.Comment;
 
 public interface CommentService {
 
-    Comment create(Long articleId, Long parentId, Long replyTo, String content, Long userId);
+    Comment create(Long articleId, Long parentId, Long replyTo, String content);
 
     IPage<CommentDTO> getTopLevel(Long articleId, int page, int size, String sort);
 
     IPage<CommentDTO> getReplies(Long parentId, int page, int size);
 
-    ToggleResult toggleLike(Long commentId, Long userId);
+    ToggleResult toggleLike(Long commentId);
 
-    void delete(Long commentId, Long userId);
+    void delete(Long commentId);
 
-    void hide(Long commentId, Long userId);
+    void hide(Long commentId);
 }

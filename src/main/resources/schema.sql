@@ -8,6 +8,7 @@ CREATE TABLE IF NOT EXISTS article (
     favorite_count INT           NOT NULL DEFAULT 0,
     read_count     INT           NOT NULL DEFAULT 0,
     comment_count  INT           NOT NULL DEFAULT 0,
+    author_id      BIGINT,
     created_at     DATETIME      NOT NULL,
     updated_at     DATETIME      NOT NULL
 );
@@ -87,4 +88,13 @@ CREATE TABLE IF NOT EXISTS comment_like (
     user_id     BIGINT NOT NULL,
     created_at  DATETIME NOT NULL,
     UNIQUE KEY uk_comment_user (comment_id, user_id)
+);
+
+CREATE TABLE IF NOT EXISTS user (
+    id          BIGINT AUTO_INCREMENT PRIMARY KEY,
+    username    VARCHAR(50)  NOT NULL,
+    password    VARCHAR(255) NOT NULL,
+    role        VARCHAR(20)  NOT NULL DEFAULT 'user',
+    created_at  DATETIME     NOT NULL,
+    UNIQUE KEY uk_username (username)
 );

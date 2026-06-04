@@ -46,3 +46,6 @@ server:
 
 app:
   sensitive-words: 暴力,色情,赌博,毒品,诈骗
+  jwt:
+    secret: blog-system-secret-key-min-256-bits-long!!
+    expiration: 86400000

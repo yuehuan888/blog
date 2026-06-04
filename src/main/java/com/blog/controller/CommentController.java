@@ -17,14 +17,12 @@ public class CommentController {
     private final CommentService commentService;
 
     @PostMapping("/comments")
-    public Result<Comment> create(@RequestBody Comment comment,
-                                   @RequestHeader(value = "X-User-Id", defaultValue = "1") Long userId) {
+    public Result<Comment> create(@RequestBody Comment comment) {
         return Result.ok(commentService.create(
                 comment.getArticleId(),
                 comment.getParentId(),
                 comment.getReplyTo(),
-                comment.getContent(),
-                userId));
+                comment.getContent()));
     }
 
     @GetMapping("/articles/{id}/comments")
@@ -46,22 +44,19 @@ public class CommentController {
     }
 
     @PostMapping("/comments/{id}/like")
-    public Result<ToggleResult> like(@PathVariable Long id,
-                                      @RequestHeader(value = "X-User-Id", defaultValue = "1") Long userId) {
-        return Result.ok(commentService.toggleLike(id, userId));
+    public Result<ToggleResult> like(@PathVariable Long id) {
+        return Result.ok(commentService.toggleLike(id));
     }
 
     @DeleteMapping("/comments/{id}")
-    public Result<Void> delete(@PathVariable Long id,
-                               @RequestHeader(value = "X-User-Id", defaultValue = "1") Long userId) {
-        commentService.delete(id, userId);
+    public Result<Void> delete(@PathVariable Long id) {
+        commentService.delete(id);
         return Result.ok();
     }
 
     @PutMapping("/comments/{id}/hide")
-    public Result<Void> hide(@PathVariable Long id,
-                              @RequestHeader(value = "X-User-Id", defaultValue = "1") Long userId) {
-        commentService.hide(id, userId);
+    public Result<Void> hide(@PathVariable Long id) {
+        commentService.hide(id);
         return Result.ok();
     }
 }

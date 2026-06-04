@@ -6,6 +6,7 @@ import com.blog.mapper.ArticleMapper;
 import com.blog.mapper.ArticleTagMapper;
 import com.blog.mapper.TagMapper;
 import com.blog.service.ArticleTagService;
+import com.blog.util.AuthContext;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -36,8 +37,8 @@ public class ArticleTagServiceImpl implements ArticleTagService {
 
     @Override
     @Transactional
-    public void setTags(Long articleId, List<Long> tagIds, Long userId) {
-        if (userId == null || userId != 1) {
+    public void setTags(Long articleId, List<Long> tagIds) {
+        if (!AuthContext.isAdmin()) {
             throw new RuntimeException("Admin access required");
         }
 
