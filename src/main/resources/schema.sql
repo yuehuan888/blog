@@ -36,3 +36,20 @@ CREATE TABLE IF NOT EXISTS article_read (
     INDEX idx_article_created (article_id, created_at),
     INDEX idx_created_at (created_at)
 );
+
+CREATE TABLE IF NOT EXISTS tag (
+    id            BIGINT AUTO_INCREMENT PRIMARY KEY,
+    name          VARCHAR(100) NOT NULL,
+    article_count INT          NOT NULL DEFAULT 0,
+    hot_score     INT          NOT NULL DEFAULT 0,
+    created_at    DATETIME     NOT NULL,
+    UNIQUE KEY uk_name (name)
+);
+
+CREATE TABLE IF NOT EXISTS article_tag (
+    id         BIGINT AUTO_INCREMENT PRIMARY KEY,
+    article_id BIGINT NOT NULL,
+    tag_id     BIGINT NOT NULL,
+    created_at DATETIME NOT NULL,
+    UNIQUE KEY uk_article_tag (article_id, tag_id)
+);

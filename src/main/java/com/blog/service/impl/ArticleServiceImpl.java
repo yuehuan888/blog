@@ -74,6 +74,7 @@ public class ArticleServiceImpl extends ServiceImpl<ArticleMapper, Article> impl
     public boolean save(Article entity) {
         boolean result = super.save(entity);
         deleteCache(CACHE_CATEGORY_STATS);
+        deleteTagCloudCache();
         sendEvent("created", entity);
         return result;
     }
@@ -85,6 +86,7 @@ public class ArticleServiceImpl extends ServiceImpl<ArticleMapper, Article> impl
         boolean result = super.updateById(entity);
         deleteCache(CACHE_ARTICLE + entity.getId());
         deleteCache(CACHE_CATEGORY_STATS);
+        deleteTagCloudCache();
         sendEvent("updated", entity);
         return result;
     }
@@ -96,12 +98,23 @@ public class ArticleServiceImpl extends ServiceImpl<ArticleMapper, Article> impl
         boolean result = super.removeById(id);
         deleteCache(CACHE_ARTICLE + id);
         deleteCache(CACHE_CATEGORY_STATS);
+        deleteTagCloudCache();
         sendEvent("deleted", article);
         return result;
     }
 
     @Override
     public IPage<Article> page(ArticleQueryDTO query) {
+        // 按标签筛选走 JOIN 查询
+        if (query.getTagId() != null) {
+            Page<Article> page = new Page<>(query.getPage(), query.getSize());
+            return baseMapper.selectByTagId(page,
+                    query.getTagId(),
+                    query.getCategory(),
+                    query.getStatus(),
+                    query.getKeyword());
+        }
+
         LambdaQueryWrapper<Article> wrapper = new LambdaQueryWrapper<>();
         if (query.getCategory() != null && !query.getCategory().isBlank()) {
             wrapper.eq(Article::getCategory, query.getCategory());
@@ -155,6 +168,7 @@ public class ArticleServiceImpl extends ServiceImpl<ArticleMapper, Article> impl
         Article updated = super.getById(id);
         deleteCache(CACHE_ARTICLE + id);
         deleteCache(CACHE_CATEGORY_STATS);
+        deleteTagCloudCache();
         sendEvent("updated", updated);
         return updated;
     }
@@ -210,6 +224,16 @@ public class ArticleServiceImpl extends ServiceImpl<ArticleMapper, Article> impl
             redisTemplate.delete(key);
         } catch (Exception e) {
             log.warn("Failed to delete cache: key={}", key, e);
+        }
+    }
+
+    private void deleteTagCloudCache() {
+        if (redisTemplate == null) return;
+        try {
+            redisTemplate.delete("tag::cloud:sort=count");
+            redisTemplate.delete("tag::cloud:sort=hot");
+        } catch (Exception e) {
+            log.warn("Failed to delete tag cloud cache", e);
         }
     }
 

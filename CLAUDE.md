@@ -27,16 +27,16 @@ mvn test -f pom.xml -Dspring.profiles.active=test
 
 ```
 com.blog
-├── entity/          # 4 个实体：Article, ArticleLike, ArticleFavorite, ArticleRead
-├── mapper/          # 4 个 Mapper，继承 BaseMapper，自定义 SQL 用注解
-├── service/         # 4 个 Service 接口
-├── service/impl/    # 4 个 Service 实现，继承 ServiceImpl<Mapper, Entity>
-├── controller/      # ArticleController（13 个端点）
-├── dto/             # Result<T>, ArticleQueryDTO, ToggleResult, HotArticleDTO
+├── entity/          # 6 个实体：Article, ArticleLike, ArticleFavorite, ArticleRead, Tag, ArticleTag
+├── mapper/          # 6 个 Mapper，继承 BaseMapper，自定义 SQL 用注解
+├── service/         # 6 个 Service 接口
+├── service/impl/    # 6 个 Service 实现，继承 ServiceImpl<Mapper, Entity>
+├── controller/      # ArticleController（15 个端点）+ TagController（4 个端点）
+├── dto/             # Result<T>, ArticleQueryDTO, ToggleResult, HotArticleDTO, TagCloudItem
 ├── config/          # MyBatisPlusConfig, RabbitMQConfig(条件), AsyncConfig
 ├── handler/         # MyMetaObjectHandler, GlobalExceptionHandler
 ├── event/           # ArticleEventListener(MQ), ArticleReadEventListener(@Async), ReadEvent
-└── task/            # HotArticleScheduler（定时重建热榜 ZSET）
+└── task/            # HotArticleScheduler, TagStatsScheduler
 ```
 
 ## 关键设计决策
@@ -113,6 +113,13 @@ com.blog
 | POST | `/api/articles/{id}/favorite` | 收藏/取消收藏（toggle，Header: X-User-Id） |
 | GET | `/api/articles/{id}/stats` | 文章统计（likeCount, favoriteCount, readCount） |
 | GET | `/api/articles/hot?days=7&page=1&size=10` | 热门文章排行 |
+| GET | `/api/articles?tagId=xxx` | 按标签筛选文章 |
+| PUT | `/api/articles/{id}/tags` | 设置文章标签（管理员） |
+| GET | `/api/articles/{id}/tags` | 查看文章标签 |
+| POST | `/api/tags` | 创建标签（管理员） |
+| PUT | `/api/tags/{id}` | 更新标签（管理员） |
+| DELETE | `/api/tags/{id}` | 删除标签（管理员） |
+| GET | `/api/tags/cloud?sort=count\|hot` | 标签云 |
 
 ## Redis Key 设计总览
 
@@ -125,10 +132,42 @@ com.blog
 | `article:read:{id}:{userId}` | String | 阅读去重标记 | 30 min |
 | `article:hot:7` | ZSET | 7 天热榜 (articleId → readCount) | 2 h |
 | `article:hot:30` | ZSET | 30 天热榜 (articleId → readCount) | 2 h |
+| `tag::{id}` | String (JSON) | 标签缓存 | 30 min |
+| `tag::cloud:sort=count` | String (JSON) | 标签云（按文章数排序） | 5 min |
+| `tag::cloud:sort=hot` | String (JSON) | 标签云（按热度排序） | 5 min |
 
 ## 数据库表
 
-4 张表：`article`（含 like_count / favorite_count / read_count）、`article_like`、`article_favorite`、`article_read`。Schema 定义见 `src/main/resources/schema.sql`。
+6 张表：`article`（含 like_count / favorite_count / read_count）、`article_like`、`article_favorite`、`article_read`、`tag`、`article_tag`。Schema 定义见 `src/main/resources/schema.sql`。
+
+## 标签系统
+
+### 数据模型
+
+- `tag`：标签主表，含 `name`（UNIQUE）、`article_count`（关联文章数）、`hot_score`（关联文章总阅读量）
+- `article_tag`：多对多中间表，UNIQUE(article_id, tag_id)，防止重复关联
+
+### article_count 维护
+
+- **实时维护**：`ArticleTagServiceImpl.setTags()` 中通过原子 SQL（`UPDATE tag SET article_count = article_count +/- 1`）维护
+- **定时校正**：`TagStatsScheduler` 每 6 小时从 `article_tag` 表重算真实数量并修正偏差
+- **删除标签**：Controller 先调 `articleTagService.deleteByTagId()` 清理关联，再删 tag 本身
+
+### hot_score 计算
+
+- 查询时通过 LEFT JOIN `article_tag` + `article` 实时计算：`SUM(article.read_count) GROUP BY tag.id`
+- 标签云缓存 5 分钟 TTL，避免高频查询
+- 写操作（文章增删改、标签关联变更）主动失效标签云缓存
+
+### 管理员校验
+
+- 项目无认证框架，管理员通过 `X-User-Id: 1` 判断
+- 校验在 Service 层完成，抛出 `RuntimeException("Admin access required")`
+
+### 限制
+
+- 每篇文章最多 5 个标签，在 `ArticleTagServiceImpl.setTags()` 中校验
+- 标签名全局唯一，通过 `tag.name` UNIQUE 约束 + Service 层查重保证
 
 ## 本地开发环境切换
 

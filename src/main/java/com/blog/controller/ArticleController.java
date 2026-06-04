@@ -6,10 +6,12 @@ import com.blog.dto.HotArticleDTO;
 import com.blog.dto.Result;
 import com.blog.dto.ToggleResult;
 import com.blog.entity.Article;
+import com.blog.entity.Tag;
 import com.blog.service.ArticleFavoriteService;
 import com.blog.service.ArticleLikeService;
 import com.blog.service.ArticleReadService;
 import com.blog.service.ArticleService;
+import com.blog.service.ArticleTagService;
 import jakarta.servlet.http.HttpServletRequest;
 import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.*;
@@ -27,6 +29,7 @@ public class ArticleController {
     private final ArticleLikeService articleLikeService;
     private final ArticleFavoriteService articleFavoriteService;
     private final ArticleReadService articleReadService;
+    private final ArticleTagService articleTagService;
 
     @PostMapping
     public Result<Article> create(@RequestBody Article article) {
@@ -101,6 +104,19 @@ public class ArticleController {
         stats.put("favoriteCount", article.getFavoriteCount());
         stats.put("readCount", article.getReadCount());
         return Result.ok(stats);
+    }
+
+    @PutMapping("/{id}/tags")
+    public Result<Void> setTags(@PathVariable Long id,
+                                @RequestBody List<Long> tagIds,
+                                @RequestHeader(value = "X-User-Id", defaultValue = "1") Long userId) {
+        articleTagService.setTags(id, tagIds, userId);
+        return Result.ok();
+    }
+
+    @GetMapping("/{id}/tags")
+    public Result<List<Tag>> getTags(@PathVariable Long id) {
+        return Result.ok(articleTagService.getByArticleId(id));
     }
 
     @GetMapping("/hot")

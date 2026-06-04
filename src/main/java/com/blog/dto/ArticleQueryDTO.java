@@ -10,4 +10,5 @@ public class ArticleQueryDTO {
     private String category;
     private String status;
     private String keyword;
+    private Long tagId;
 }
