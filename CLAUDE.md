@@ -2,11 +2,15 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
+## 项目简介
+
+个人博客系统后端 API，支持文章管理、点赞收藏、阅读统计与热门排行、标签系统。采用 Spring Boot + MyBatis-Plus 构建，Redis/RabbitMQ 通过降级机制实现本地零依赖开发。
+
 ## 技术栈
 
 - Java 17, Spring Boot 3.2.5, MyBatis-Plus 3.5.6
 - 数据库：MySQL（生产）/ H2（测试）
-- 缓存：StringRedisTemplate 手动控制（本地无 Redis 时自动降级为内存缓存）
+- 缓存：StringRedisTemplate 手动控制（本地无 Redis 时自动降级查库）
 - 消息队列：RabbitMQ（可选，默认排除自动配置）
 - 构建：Maven
 
@@ -16,12 +20,14 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 # 编译
 mvn compile -f pom.xml
 
-# 运行（需先创建 blogsyetem 数据库）
+# 运行（需先创建 blogsystem 数据库，表结构自动建）
 mvn spring-boot:run -f pom.xml
 
 # 测试（使用 H2 内存库）
 mvn test -f pom.xml -Dspring.profiles.active=test
 ```
+
+> 首次运行：`mysql -u root -p -e "CREATE DATABASE IF NOT EXISTS blogsystem DEFAULT CHARSET utf8mb4;"` 建库即可，`spring.sql.init.mode=always` 会自动执行 `schema.sql` 建表。`CREATE TABLE IF NOT EXISTS` 确保重复执行不会报错。
 
 ## 项目架构
 
@@ -76,9 +82,10 @@ com.blog
 
 - **去重**：`SET NX EX 1800` → key=`article:read:{articleId}:{userId}`（同一用户 30min 内不重复计数）
 - **热榜 ZSET**：去重通过后 `ZINCRBY article:hot:7` / `article:hot:30`
-- **异步持久化**：`ApplicationEventPublisher.publishEvent(ReadEvent)` → `@Async("readTaskExecutor")` + `@TransactionalEventListener(AFTER_COMMIT)` → 写 `article_read` 表 + `UPDATE article SET read_count = read_count + 1`
+- **异步持久化**：`ApplicationEventPublisher.publishEvent(ReadEvent)` → `@Async("readTaskExecutor")` + `@EventListener` → 写 `article_read` 表 + `UPDATE article SET read_count = read_count + 1`
 - **热门查询**：`ZREVRANGE article:hot:{days}` 分页取 ID → `ArticleMapper.selectByIds` 批量查文章；Redis 不可用时降级 DB `COUNT(*) ... GROUP BY article_id`
-- 去重和 ZSET 操作同步（不阻塞主响应），DB 写异步；Redis 不可用时跳过去重和 ZSET 更新
+- 去重和 ZSET 操作在主请求中同步完成，DB 写入由异步线程池 `readTaskExecutor`（core=5, max=10）处理
+- **降级行为**：Redis 不可用时，去重跳过（每次访问都计数），ZSET 热榜不更新，热门查询自动降级为 DB 聚合
 
 ### 定时任务：HotArticleScheduler
 
@@ -136,10 +143,6 @@ com.blog
 | `tag::cloud:sort=count` | String (JSON) | 标签云（按文章数排序） | 5 min |
 | `tag::cloud:sort=hot` | String (JSON) | 标签云（按热度排序） | 5 min |
 
-## 数据库表
-
-6 张表：`article`（含 like_count / favorite_count / read_count）、`article_like`、`article_favorite`、`article_read`、`tag`、`article_tag`。Schema 定义见 `src/main/resources/schema.sql`。
-
 ## 标签系统
 
 ### 数据模型
@@ -169,11 +172,26 @@ com.blog
 - 每篇文章最多 5 个标签，在 `ArticleTagServiceImpl.setTags()` 中校验
 - 标签名全局唯一，通过 `tag.name` UNIQUE 约束 + Service 层查重保证
 
+## 数据库表
+
+6 张表，Schema 定义见 `src/main/resources/schema.sql`，应用启动时自动执行：
+
+| 表 | 用途 | 关键字段/约束 |
+|----|------|-------------|
+| `article` | 文章主表 | like_count, favorite_count, read_count 为冗余计数器 |
+| `article_like` | 用户-文章点赞关联 | UNIQUE(user_id, article_id) |
+| `article_favorite` | 用户-文章收藏关联 | UNIQUE(user_id, article_id) |
+| `article_read` | 阅读记录 | INDEX(article_id, created_at), INDEX(created_at) |
+| `tag` | 标签主表 | UNIQUE(name), article_count, hot_score |
+| `article_tag` | 文章-标签多对多 | UNIQUE(article_id, tag_id) |
+
 ## 本地开发环境切换
 
-Redis/RabbitMQ 已做降级处理，本地开发无需安装：
+Redis/RabbitMQ 已做降级处理，本地开发无需安装，直接启动即可：
 
-- **缓存**：`StringRedisTemplate` 为 null，所有 `getCache`/`setCache`/`deleteCache` 跳过，直接查库
+- **缓存（Redis）**：若未配置 Redis 连接，`StringRedisTemplate` 为 null，所有 `getCache`/`setCache`/`deleteCache` 跳过，直接查库。若 Redis 依赖在 classpath 上但服务未运行，连接异常被 catch 后降级
+- **阅读去重**：Redis 不可用时，每次访问都计为新阅读（去重失效但不影响功能）
+- **热榜 ZSET**：Redis 不可用时 ZSET 不更新，热门查询自动降级为查 `article_read` 表聚合
 - **MQ**：`RabbitTemplate` 为 null，`sendEvent()` 跳过
 
 如需启用，修改 `application.yml`：
