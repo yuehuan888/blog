@@ -33,12 +33,12 @@ mvn test -f pom.xml -Dspring.profiles.active=test
 
 ```
 com.blog
-├── entity/          # 7 个实体：Article, ArticleLike, ArticleFavorite, ArticleRead, Tag, ArticleTag, ArticleHistory
-├── mapper/          # 7 个 Mapper，继承 BaseMapper，自定义 SQL 用注解
-├── service/         # 7 个 Service 接口
-├── service/impl/    # 7 个 Service 实现，继承 ServiceImpl<Mapper, Entity>
-├── controller/      # ArticleController（15 个端点）+ TagController（4 个端点）
-├── dto/             # Result<T>, ArticleQueryDTO, ToggleResult, HotArticleDTO, TagCloudItem
+├── entity/          # 9 个实体：Article, ArticleLike, ArticleFavorite, ArticleRead, Tag, ArticleTag, ArticleHistory, Comment, CommentLike
+├── mapper/          # 9 个 Mapper，继承 BaseMapper，自定义 SQL 用注解
+├── service/         # 8 个 Service 接口
+├── service/impl/    # 8 个 Service 实现，继承 ServiceImpl<Mapper, Entity>
+├── controller/      # ArticleController（15 个端点）+ TagController（4 个端点）+ CommentController（6 个端点）
+├── dto/             # Result<T>, ArticleQueryDTO, ToggleResult, HotArticleDTO, TagCloudItem, CommentDTO
 ├── config/          # MyBatisPlusConfig, RabbitMQConfig(条件), AsyncConfig
 ├── handler/         # MyMetaObjectHandler, GlobalExceptionHandler
 ├── event/           # ArticleEventListener(MQ), ArticleReadEventListener(@Async), ReadEvent
@@ -130,6 +130,12 @@ com.blog
 | GET | `/api/articles/{id}/history?page=&size=` | 版本历史列表 |
 | GET | `/api/articles/{id}/history/{historyId}` | 版本详情 |
 | POST | `/api/articles/{id}/rollback/{historyId}` | 回滚到指定版本（管理员） |
+| POST | `/api/comments` | 发表评论 |
+| GET | `/api/articles/{id}/comments?sort=time\|like` | 顶级评论（含 3 条子回复） |
+| GET | `/api/comments/{id}/replies` | 子回复列表 |
+| POST | `/api/comments/{id}/like` | 评论点赞 toggle |
+| DELETE | `/api/comments/{id}` | 删除评论（本人软删/管理员硬删） |
+| PUT | `/api/comments/{id}/hide` | 管理员隐藏评论 |
 
 ## Redis Key 设计总览
 
@@ -177,7 +183,7 @@ com.blog
 
 ## 数据库表
 
-6 张表，Schema 定义见 `src/main/resources/schema.sql`，应用启动时自动执行：
+9 张表，Schema 定义见 `src/main/resources/schema.sql`，应用启动时自动执行：
 
 | 表 | 用途 | 关键字段/约束 |
 |----|------|-------------|
@@ -188,6 +194,8 @@ com.blog
 | `tag` | 标签主表 | UNIQUE(name), article_count, hot_score |
 | `article_tag` | 文章-标签多对多 | UNIQUE(article_id, tag_id) |
 | `article_history` | 文章版本历史 | INDEX(article_id, version_no), change_type |
+| `comment` | 评论 | parent_id/reply_to 嵌套，status 状态控制，INDEX(article_id, parent_id) |
+| `comment_like` | 评论点赞 | UNIQUE(comment_id, user_id) |
 
 ## 文章版本历史
 
@@ -214,6 +222,30 @@ com.blog
 
 - `GET /api/articles` 默认只返回 `status=published` 的文章
 - 可通过 `?status=draft` 显式查询草稿
+
+## 评论系统
+
+### 数据结构
+- `parent_id`：父评论 ID，NULL 为顶级评论
+- `reply_to`：被回复的评论 ID
+- `status`：visible（正常）/ hidden（管理员隐藏）/ deleted（用户自行删除）
+
+### 嵌套加载
+- 顶级评论分页查询时，每条预加载最新 3 条子回复（`replyCount` 表示总回复数）
+- 更多子回复通过 GET /api/comments/{id}/replies 懒加载
+
+### 删除策略
+- 评论作者：status → 'deleted'，内容保留，子回复不受影响
+- 管理员（userId=1）：递归硬删除该评论及所有子孙回复
+- 管理员标记违规：status → 'hidden'，不对外展示
+
+### 敏感词
+- 配置在 application.yml 的 `app.sensitive-words`
+- 发布时 content 命中任一敏感词则拒绝（400）
+
+### 计数维护
+- article 表 comment_count 原子更新
+- 新增/删除时实时维护
 
 ## 本地开发环境切换
 

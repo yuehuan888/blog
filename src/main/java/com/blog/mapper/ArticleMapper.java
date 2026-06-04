@@ -53,4 +53,10 @@ public interface ArticleMapper extends BaseMapper<Article> {
                                  @Param("category") String category,
                                  @Param("status") String status,
                                  @Param("keyword") String keyword);
+
+    @Update("UPDATE article SET comment_count = comment_count + 1 WHERE id = #{id}")
+    int incrementCommentCount(@Param("id") Long id);
+
+    @Update("UPDATE article SET comment_count = comment_count - 1 WHERE id = #{id} AND comment_count > 0")
+    int decrementCommentCount(@Param("id") Long id);
 }

@@ -26,6 +26,8 @@ public class Article {
 
     private Integer readCount;
 
+    private Integer commentCount;
+
     @TableField(fill = FieldFill.INSERT)
     private LocalDateTime createdAt;
 

@@ -7,6 +7,7 @@ CREATE TABLE IF NOT EXISTS article (
     like_count     INT           NOT NULL DEFAULT 0,
     favorite_count INT           NOT NULL DEFAULT 0,
     read_count     INT           NOT NULL DEFAULT 0,
+    comment_count  INT           NOT NULL DEFAULT 0,
     created_at     DATETIME      NOT NULL,
     updated_at     DATETIME      NOT NULL
 );
@@ -64,4 +65,26 @@ CREATE TABLE IF NOT EXISTS article_history (
     change_type VARCHAR(20)  NOT NULL DEFAULT 'UPDATE',
     created_at  DATETIME     NOT NULL,
     INDEX idx_article_version (article_id, version_no)
+);
+
+CREATE TABLE IF NOT EXISTS comment (
+    id          BIGINT AUTO_INCREMENT PRIMARY KEY,
+    article_id  BIGINT       NOT NULL,
+    user_id     BIGINT       NOT NULL,
+    parent_id   BIGINT,
+    reply_to    BIGINT,
+    content     TEXT         NOT NULL,
+    like_count  INT          NOT NULL DEFAULT 0,
+    status      VARCHAR(20)  NOT NULL DEFAULT 'visible',
+    created_at  DATETIME     NOT NULL,
+    INDEX idx_article_parent (article_id, parent_id),
+    INDEX idx_parent (parent_id)
+);
+
+CREATE TABLE IF NOT EXISTS comment_like (
+    id          BIGINT AUTO_INCREMENT PRIMARY KEY,
+    comment_id  BIGINT NOT NULL,
+    user_id     BIGINT NOT NULL,
+    created_at  DATETIME NOT NULL,
+    UNIQUE KEY uk_comment_user (comment_id, user_id)
 );

@@ -106,6 +106,7 @@ public class ArticleController {
         stats.put("likeCount", article.getLikeCount());
         stats.put("favoriteCount", article.getFavoriteCount());
         stats.put("readCount", article.getReadCount());
+        stats.put("commentCount", article.getCommentCount());
         return Result.ok(stats);
     }
 
