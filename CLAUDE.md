@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## 项目简介
 
-个人博客系统后端 API，支持文章管理、点赞收藏、阅读统计与热门排行、标签系统。采用 Spring Boot + MyBatis-Plus 构建，Redis/RabbitMQ 通过降级机制实现本地零依赖开发。
+个人博客系统后端 API，支持文章管理、点赞收藏、阅读统计与热门排行、标签系统、评论系统、用户认证与权限管理。采用 Spring Boot + MyBatis-Plus + JWT 构建，Redis/RabbitMQ 通过降级机制实现本地零依赖开发。
 
 ## 技术栈
 
@@ -33,16 +33,17 @@ mvn test -f pom.xml -Dspring.profiles.active=test
 
 ```
 com.blog
-├── entity/          # 9 个实体：Article, ArticleLike, ArticleFavorite, ArticleRead, Tag, ArticleTag, ArticleHistory, Comment, CommentLike
-├── mapper/          # 9 个 Mapper，继承 BaseMapper，自定义 SQL 用注解
-├── service/         # 8 个 Service 接口
-├── service/impl/    # 8 个 Service 实现，继承 ServiceImpl<Mapper, Entity>
-├── controller/      # ArticleController（15 个端点）+ TagController（4 个端点）+ CommentController（6 个端点）
-├── dto/             # Result<T>, ArticleQueryDTO, ToggleResult, HotArticleDTO, TagCloudItem, CommentDTO
-├── config/          # MyBatisPlusConfig, RabbitMQConfig(条件), AsyncConfig
+├── entity/          # 10 个实体：Article, ArticleLike, ArticleFavorite, ArticleRead, Tag, ArticleTag, ArticleHistory, Comment, CommentLike, User
+├── mapper/          # 10 个 Mapper，继承 BaseMapper，自定义 SQL 用注解
+├── service/         # 9 个 Service 接口
+├── service/impl/    # 9 个 Service 实现，继承 ServiceImpl<Mapper, Entity>
+├── controller/      # ArticleController（15 个端点）+ TagController（4 个端点）+ CommentController（6 个端点）+ AuthController（3 个端点）
+├── dto/             # Result<T>, ArticleQueryDTO, ToggleResult, HotArticleDTO, TagCloudItem, CommentDTO, LoginRequest, LoginResponse
+├── config/          # MyBatisPlusConfig, RabbitMQConfig(条件), AsyncConfig, AuthInterceptor, WebMvcConfig
 ├── handler/         # MyMetaObjectHandler, GlobalExceptionHandler
 ├── event/           # ArticleEventListener(MQ), ArticleReadEventListener(@Async), ReadEvent
-└── task/            # HotArticleScheduler, TagStatsScheduler, HistoryCleanupScheduler
+├── task/            # HotArticleScheduler, TagStatsScheduler, HistoryCleanupScheduler
+└── util/            # JwtUtil, AuthContext (ThreadLocal)
 ```
 
 ## 关键设计决策
@@ -103,7 +104,7 @@ com.blog
 
 ## REST API 端点
 
-所有接口统一返回 `Result<T>`（code + message + data）。用户身份通过请求头 `X-User-Id` 传入（默认值 1）。
+所有接口统一返回 `Result<T>`（code + message + data）。用户身份通过请求头 `Authorization: Bearer <JWT>` 传入。认证接口（/api/auth/**）无需 token，其余接口均需携带有效 JWT。
 
 | 方法 | 路径 | 说明 |
 |------|------|------|
@@ -116,8 +117,8 @@ com.blog
 | DELETE | `/api/articles/{id}` | 删除 |
 | DELETE | `/api/articles?ids=1,2,3` | 批量删除 |
 | GET | `/api/articles/statistics/category` | 分类文章数量统计 |
-| POST | `/api/articles/{id}/like` | 点赞/取消点赞（toggle，Header: X-User-Id） |
-| POST | `/api/articles/{id}/favorite` | 收藏/取消收藏（toggle，Header: X-User-Id） |
+| POST | `/api/articles/{id}/like` | 点赞/取消点赞（toggle） |
+| POST | `/api/articles/{id}/favorite` | 收藏/取消收藏（toggle） |
 | GET | `/api/articles/{id}/stats` | 文章统计（likeCount, favoriteCount, readCount） |
 | GET | `/api/articles/hot?days=7&page=1&size=10` | 热门文章排行 |
 | GET | `/api/articles?tagId=xxx` | 按标签筛选文章 |
@@ -136,6 +137,9 @@ com.blog
 | POST | `/api/comments/{id}/like` | 评论点赞 toggle |
 | DELETE | `/api/comments/{id}` | 删除评论（本人软删/管理员硬删） |
 | PUT | `/api/comments/{id}/hide` | 管理员隐藏评论 |
+| POST | `/api/auth/register` | 注册 |
+| POST | `/api/auth/login` | 登录，返回 JWT |
+| POST | `/api/auth/logout` | 登出，token 加入黑名单 |
 
 ## Redis Key 设计总览
 
@@ -173,7 +177,8 @@ com.blog
 
 ### 管理员校验
 
-- 项目无认证框架，管理员通过 `X-User-Id: 1` 判断
+- 项目通过 JWT 拦截器 + ThreadLocal（`AuthContext`）管理用户身份
+- 管理员通过 `AuthContext.isAdmin()` 判断（role=admin）
 - 校验在 Service 层完成，抛出 `RuntimeException("Admin access required")`
 
 ### 限制
@@ -181,9 +186,30 @@ com.blog
 - 每篇文章最多 5 个标签，在 `ArticleTagServiceImpl.setTags()` 中校验
 - 标签名全局唯一，通过 `tag.name` UNIQUE 约束 + Service 层查重保证
 
+## 用户认证
+
+### JWT 认证流程
+- `/api/auth/**` 免认证，其余 `/api/**` 均需携带 `Authorization: Bearer <token>`
+- `AuthInterceptor` 拦截请求，解析 JWT 后将 userId/username/role 存入 `AuthContext`（ThreadLocal）
+- Controller 和 Service 通过 `AuthContext.getUserId()` / `AuthContext.isAdmin()` 获取当前用户
+- Token 过期时间默认 24 小时（`app.jwt.expiration` 配置）
+
+### 登出与黑名单
+- 登出时将 token 加入 Redis 黑名单（key: `token:blacklist:<token>`，TTL 与 token 有效期一致）
+- 拦截器每次校验 token 是否在黑名单中
+- Redis 不可用时跳过黑名单校验（降级）
+
+### 权限判断
+- 旧：`@RequestHeader("X-User-Id")` + `userId == 1`
+- 新：`AuthContext.getUserId()` + `AuthContext.isAdmin()`
+
+### 文章所有权
+- 创建文章时自动设置 `author_id` 为当前用户
+- 编辑/删除文章：作者本人或管理员可操作
+
 ## 数据库表
 
-9 张表，Schema 定义见 `src/main/resources/schema.sql`，应用启动时自动执行：
+10 张表，Schema 定义见 `src/main/resources/schema.sql`，应用启动时自动执行：
 
 | 表 | 用途 | 关键字段/约束 |
 |----|------|-------------|
@@ -196,6 +222,7 @@ com.blog
 | `article_history` | 文章版本历史 | INDEX(article_id, version_no), change_type |
 | `comment` | 评论 | parent_id/reply_to 嵌套，status 状态控制，INDEX(article_id, parent_id) |
 | `comment_like` | 评论点赞 | UNIQUE(comment_id, user_id) |
+| `user` | 用户表 | UNIQUE(username), role 区分 admin/user |
 
 ## 文章版本历史
 
@@ -216,7 +243,7 @@ com.blog
 
 - 将当前文章内容覆盖为目标版本内容
 - 回滚前自动保存当前状态为一条新历史（change_type=ROLLBACK）
-- 需管理员权限（X-User-Id: 1）
+- 需管理员权限（role=admin）
 
 ### 文章列表
 
