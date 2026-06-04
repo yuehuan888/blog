@@ -31,4 +31,7 @@ public class Article {
 
     @TableField(fill = FieldFill.INSERT_UPDATE)
     private LocalDateTime updatedAt;
+
+    public static final String STATUS_DRAFT = "draft";
+    public static final String STATUS_PUBLISHED = "published";
 }

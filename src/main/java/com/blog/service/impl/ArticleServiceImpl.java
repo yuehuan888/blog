@@ -7,8 +7,11 @@ import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
 import com.blog.dto.ArticleQueryDTO;
 import com.blog.entity.Article;
+import com.blog.entity.ArticleHistory;
+import com.blog.mapper.ArticleHistoryMapper;
 import com.blog.mapper.ArticleMapper;
 import com.blog.service.ArticleService;
+import java.util.Objects;
 import com.fasterxml.jackson.databind.JavaType;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.slf4j.Logger;
@@ -34,6 +37,10 @@ public class ArticleServiceImpl extends ServiceImpl<ArticleMapper, Article> impl
     private static final String CACHE_ARTICLE = "article::";
     private static final String CACHE_CATEGORY_STATS = "categoryStats";
     private static final Duration CACHE_TTL = Duration.ofMinutes(30);
+    private static final int MAX_HISTORY_VERSIONS = 20;
+
+    @Autowired
+    private ArticleHistoryMapper articleHistoryMapper;
 
     @Autowired(required = false)
     private StringRedisTemplate redisTemplate;
@@ -82,7 +89,8 @@ public class ArticleServiceImpl extends ServiceImpl<ArticleMapper, Article> impl
     @Override
     @Transactional
     public boolean updateById(Article entity) {
-        getById(entity.getId());
+        Article old = getById(entity.getId());
+        saveHistoryIfNeeded(old, entity);
         boolean result = super.updateById(entity);
         deleteCache(CACHE_ARTICLE + entity.getId());
         deleteCache(CACHE_CATEGORY_STATS);
@@ -108,10 +116,12 @@ public class ArticleServiceImpl extends ServiceImpl<ArticleMapper, Article> impl
         // 按标签筛选走 JOIN 查询
         if (query.getTagId() != null) {
             Page<Article> page = new Page<>(query.getPage(), query.getSize());
+            String tagStatus = query.getStatus() != null && !query.getStatus().isBlank()
+                    ? query.getStatus() : Article.STATUS_PUBLISHED;
             return baseMapper.selectByTagId(page,
                     query.getTagId(),
                     query.getCategory(),
-                    query.getStatus(),
+                    tagStatus,
                     query.getKeyword());
         }
 
@@ -119,8 +129,11 @@ public class ArticleServiceImpl extends ServiceImpl<ArticleMapper, Article> impl
         if (query.getCategory() != null && !query.getCategory().isBlank()) {
             wrapper.eq(Article::getCategory, query.getCategory());
         }
-        if (query.getStatus() != null && !query.getStatus().isBlank()) {
-            wrapper.eq(Article::getStatus, query.getStatus());
+        String status = query.getStatus();
+        if (status != null && !status.isBlank()) {
+            wrapper.eq(Article::getStatus, status);
+        } else {
+            wrapper.eq(Article::getStatus, Article.STATUS_PUBLISHED);
         }
         if (query.getKeyword() != null && !query.getKeyword().isBlank()) {
             wrapper.and(w -> w
@@ -137,7 +150,7 @@ public class ArticleServiceImpl extends ServiceImpl<ArticleMapper, Article> impl
     @Override
     @Transactional
     public Article patch(Long id, Article partial) {
-        getById(id);
+        Article old = getById(id);
 
         LambdaUpdateWrapper<Article> wrapper = new LambdaUpdateWrapper<>();
         wrapper.eq(Article::getId, id);
@@ -161,6 +174,15 @@ public class ArticleServiceImpl extends ServiceImpl<ArticleMapper, Article> impl
         }
 
         if (hasUpdate) {
+            // Build projected new article for comparison
+            Article projected = new Article();
+            projected.setId(id);
+            projected.setTitle(partial.getTitle() != null ? partial.getTitle() : old.getTitle());
+            projected.setContent(partial.getContent() != null ? partial.getContent() : old.getContent());
+            projected.setCategory(partial.getCategory() != null ? partial.getCategory() : old.getCategory());
+            projected.setStatus(partial.getStatus() != null ? partial.getStatus() : old.getStatus());
+            saveHistoryIfNeeded(old, projected);
+
             wrapper.set(Article::getUpdatedAt, LocalDateTime.now());
             baseMapper.update(wrapper);
         }
@@ -182,6 +204,36 @@ public class ArticleServiceImpl extends ServiceImpl<ArticleMapper, Article> impl
         List<Map<String, Object>> stats = baseMapper.countByCategory();
         setCache(CACHE_CATEGORY_STATS, stats);
         return stats;
+    }
+
+    // ==================== 版本历史 ====================
+
+    private void saveHistoryIfNeeded(Article oldArticle, Article newArticle) {
+        if (!Article.STATUS_PUBLISHED.equals(oldArticle.getStatus())) {
+            return;
+        }
+
+        boolean contentChanged =
+                !Objects.equals(oldArticle.getTitle(), newArticle.getTitle()) ||
+                !Objects.equals(oldArticle.getContent(), newArticle.getContent()) ||
+                !Objects.equals(oldArticle.getCategory(), newArticle.getCategory());
+
+        if (!contentChanged) {
+            return;
+        }
+
+        int nextVersion = articleHistoryMapper.getMaxVersionNo(oldArticle.getId()) + 1;
+
+        ArticleHistory history = new ArticleHistory();
+        history.setArticleId(oldArticle.getId());
+        history.setTitle(oldArticle.getTitle());
+        history.setContent(oldArticle.getContent());
+        history.setCategory(oldArticle.getCategory());
+        history.setVersionNo(nextVersion);
+        history.setChangeType("UPDATE");
+        articleHistoryMapper.insert(history);
+
+        articleHistoryMapper.deleteOldVersions(oldArticle.getId(), MAX_HISTORY_VERSIONS);
     }
 
     // ==================== 缓存工具方法 ====================

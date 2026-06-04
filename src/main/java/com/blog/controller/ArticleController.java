@@ -6,8 +6,10 @@ import com.blog.dto.HotArticleDTO;
 import com.blog.dto.Result;
 import com.blog.dto.ToggleResult;
 import com.blog.entity.Article;
+import com.blog.entity.ArticleHistory;
 import com.blog.entity.Tag;
 import com.blog.service.ArticleFavoriteService;
+import com.blog.service.ArticleHistoryService;
 import com.blog.service.ArticleLikeService;
 import com.blog.service.ArticleReadService;
 import com.blog.service.ArticleService;
@@ -30,6 +32,7 @@ public class ArticleController {
     private final ArticleFavoriteService articleFavoriteService;
     private final ArticleReadService articleReadService;
     private final ArticleTagService articleTagService;
+    private final ArticleHistoryService articleHistoryService;
 
     @PostMapping
     public Result<Article> create(@RequestBody Article article) {
@@ -117,6 +120,30 @@ public class ArticleController {
     @GetMapping("/{id}/tags")
     public Result<List<Tag>> getTags(@PathVariable Long id) {
         return Result.ok(articleTagService.getByArticleId(id));
+    }
+
+    @GetMapping("/{id}/history")
+    public Result<IPage<ArticleHistory>> history(@PathVariable Long id,
+                                                  @RequestParam(defaultValue = "1") int page,
+                                                  @RequestParam(defaultValue = "10") int size) {
+        return Result.ok(articleHistoryService.getHistory(id, page, size));
+    }
+
+    @GetMapping("/{id}/history/{historyId}")
+    public Result<ArticleHistory> historyDetail(@PathVariable Long id,
+                                                 @PathVariable Long historyId) {
+        ArticleHistory history = articleHistoryService.getDetail(historyId);
+        if (!history.getArticleId().equals(id)) {
+            return Result.fail(400, "History does not belong to this article");
+        }
+        return Result.ok(history);
+    }
+
+    @PostMapping("/{id}/rollback/{historyId}")
+    public Result<Article> rollback(@PathVariable Long id,
+                                     @PathVariable Long historyId,
+                                     @RequestHeader(value = "X-User-Id", defaultValue = "1") Long userId) {
+        return Result.ok(articleHistoryService.rollback(id, historyId, userId));
     }
 
     @GetMapping("/hot")

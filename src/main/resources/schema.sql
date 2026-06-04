@@ -53,3 +53,15 @@ CREATE TABLE IF NOT EXISTS article_tag (
     created_at DATETIME NOT NULL,
     UNIQUE KEY uk_article_tag (article_id, tag_id)
 );
+
+CREATE TABLE IF NOT EXISTS article_history (
+    id          BIGINT AUTO_INCREMENT PRIMARY KEY,
+    article_id  BIGINT       NOT NULL,
+    title       VARCHAR(255) NOT NULL,
+    content     TEXT         NOT NULL,
+    category    VARCHAR(100),
+    version_no  INT          NOT NULL,
+    change_type VARCHAR(20)  NOT NULL DEFAULT 'UPDATE',
+    created_at  DATETIME     NOT NULL,
+    INDEX idx_article_version (article_id, version_no)
+);

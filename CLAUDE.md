@@ -33,16 +33,16 @@ mvn test -f pom.xml -Dspring.profiles.active=test
 
 ```
 com.blog
-├── entity/          # 6 个实体：Article, ArticleLike, ArticleFavorite, ArticleRead, Tag, ArticleTag
-├── mapper/          # 6 个 Mapper，继承 BaseMapper，自定义 SQL 用注解
-├── service/         # 6 个 Service 接口
-├── service/impl/    # 6 个 Service 实现，继承 ServiceImpl<Mapper, Entity>
+├── entity/          # 7 个实体：Article, ArticleLike, ArticleFavorite, ArticleRead, Tag, ArticleTag, ArticleHistory
+├── mapper/          # 7 个 Mapper，继承 BaseMapper，自定义 SQL 用注解
+├── service/         # 7 个 Service 接口
+├── service/impl/    # 7 个 Service 实现，继承 ServiceImpl<Mapper, Entity>
 ├── controller/      # ArticleController（15 个端点）+ TagController（4 个端点）
 ├── dto/             # Result<T>, ArticleQueryDTO, ToggleResult, HotArticleDTO, TagCloudItem
 ├── config/          # MyBatisPlusConfig, RabbitMQConfig(条件), AsyncConfig
 ├── handler/         # MyMetaObjectHandler, GlobalExceptionHandler
 ├── event/           # ArticleEventListener(MQ), ArticleReadEventListener(@Async), ReadEvent
-└── task/            # HotArticleScheduler, TagStatsScheduler
+└── task/            # HotArticleScheduler, TagStatsScheduler, HistoryCleanupScheduler
 ```
 
 ## 关键设计决策
@@ -127,6 +127,9 @@ com.blog
 | PUT | `/api/tags/{id}` | 更新标签（管理员） |
 | DELETE | `/api/tags/{id}` | 删除标签（管理员） |
 | GET | `/api/tags/cloud?sort=count\|hot` | 标签云 |
+| GET | `/api/articles/{id}/history?page=&size=` | 版本历史列表 |
+| GET | `/api/articles/{id}/history/{historyId}` | 版本详情 |
+| POST | `/api/articles/{id}/rollback/{historyId}` | 回滚到指定版本（管理员） |
 
 ## Redis Key 设计总览
 
@@ -184,6 +187,33 @@ com.blog
 | `article_read` | 阅读记录 | INDEX(article_id, created_at), INDEX(created_at) |
 | `tag` | 标签主表 | UNIQUE(name), article_count, hot_score |
 | `article_tag` | 文章-标签多对多 | UNIQUE(article_id, tag_id) |
+| `article_history` | 文章版本历史 | INDEX(article_id, version_no), change_type |
+
+## 文章版本历史
+
+### 触发条件
+
+- 文章状态为 `published` 且 title/content/category 任一变化时，自动保存历史快照
+- 草稿（draft）状态不生成历史
+- PUT 和 PATCH 均触发同一检查逻辑（封装在 `saveHistoryIfNeeded` 私有方法中）
+- 仅改 status（draft→published）不记录历史
+
+### 版本策略
+
+- 每篇文章独立递增版本号（version_no）
+- 最多保留 20 个版本，超过后自动删除最旧版本
+- `change_type`：`UPDATE`（普通编辑）或 `ROLLBACK`（回滚操作）
+
+### 回滚
+
+- 将当前文章内容覆盖为目标版本内容
+- 回滚前自动保存当前状态为一条新历史（change_type=ROLLBACK）
+- 需管理员权限（X-User-Id: 1）
+
+### 文章列表
+
+- `GET /api/articles` 默认只返回 `status=published` 的文章
+- 可通过 `?status=draft` 显式查询草稿
 
 ## 本地开发环境切换
 
