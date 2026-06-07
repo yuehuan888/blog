@@ -37,6 +37,26 @@ public class AuthInterceptor implements HandlerInterceptor {
         }
 
         String authHeader = request.getHeader("Authorization");
+
+        // GET requests: optional auth (allow anonymous browsing)
+        if ("GET".equalsIgnoreCase(request.getMethod())) {
+            if (authHeader != null && authHeader.startsWith("Bearer ")) {
+                try {
+                    String token = authHeader.substring(7);
+                    if (!userService.isTokenBlacklisted(token)) {
+                        Claims claims = jwtUtil.parseToken(token);
+                        Long userId = jwtUtil.getUserId(claims);
+                        String username = jwtUtil.getUsername(claims);
+                        String role = jwtUtil.getRole(claims);
+                        AuthContext.set(userId, username, role);
+                    }
+                } catch (Exception ignored) {
+                    // Token invalid → proceed as anonymous
+                }
+            }
+            return true;
+        }
+
         if (authHeader == null || !authHeader.startsWith("Bearer ")) {
             response.setStatus(401);
             response.setContentType("application/json;charset=UTF-8");
