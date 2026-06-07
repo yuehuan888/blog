@@ -1,0 +1,30 @@
+# Dependencies
+node_modules/
+
+# Nuxt
+.output/
+.data/
+.nuxt/
+dist/
+
+# Maven
+target/
+
+# IDE
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Env
+.env
+.env.local
+
+# Logs
+*.log
+
+# Claude
+.claude/settings.local.json
