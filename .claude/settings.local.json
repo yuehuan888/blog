@@ -1,0 +1,25 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(git -C /d/vibecoding1/blog-backend status)",
+      "Bash(git commit *)",
+      "Bash(mvn compile *)",
+      "Bash(git -C /d/vibecoding1/blog-backend add -A)",
+      "Bash(git -C /d/vibecoding1/blog-backend commit -m ' *)",
+      "Bash(git config *)",
+      "Bash(gh --version)",
+      "Bash(git *)",
+      "Bash(ssh *)",
+      "Bash(grep ssh.github.com __TRACKED_VAR__/.ssh/known_hosts)",
+      "Bash(npx nuxi@latest *)",
+      "Bash(npm install *)",
+      "Bash(npx nuxt *)",
+      "Bash(./node_modules/.bin/nuxt typecheck *)",
+      "Bash(cmd *)",
+      "Bash(npm exec *)",
+      "Bash(npx nuxi *)",
+      "Bash(echo \"EXIT_CODE=$?\")",
+      "Bash(echo \"EXIT CODE: $?\")"
+    ]
+  }
+}

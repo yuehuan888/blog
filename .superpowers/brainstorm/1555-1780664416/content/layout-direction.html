@@ -1,0 +1,43 @@
+<h2>整体布局方向偏好</h2>
+<p class="subtitle">参照小红书风格，但可以根据定位调整 — 选出最接近你想象的风格</p>
+
+<div class="options">
+  <div class="option" data-choice="a" onclick="toggleSelect(this)">
+    <div class="letter">A</div>
+    <div class="content">
+      <h3>瀑布流 + 卡片式（小红书风格）</h3>
+      <p>首页多列瀑布流卡片，封面图 + 标题 + 作者头像 + 互动数据。视觉主导、强调图片，适合吸引力强的浏览体验。</p>
+      <div style="display:flex;gap:8px;margin-top:12px;">
+        <div style="flex:1;background:#fce4ec;border-radius:12px;padding:20px 12px;text-align:center;">📷<br><small>卡片1</small></div>
+        <div style="flex:1;background:#f3e5f5;border-radius:12px;padding:30px 12px;text-align:center;">📷<br><small>卡片2</small></div>
+        <div style="flex:1;background:#e8f5e9;border-radius:12px;padding:15px 12px;text-align:center;">📷<br><small>卡片3</small></div>
+        <div style="flex:1;background:#e3f2fd;border-radius:12px;padding:25px 12px;text-align:center;">📷<br><small>卡片4</small></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="option" data-choice="b" onclick="toggleSelect(this)">
+    <div class="letter">B</div>
+    <div class="content">
+      <h3>列表 + 封面缩略图（Medium/掘金风格）</h3>
+      <p>文章以列表形式排列，左图右文或上文下图，强调标题和摘要。适合文字内容较多、深度阅读的场景。</p>
+      <div style="display:flex;flex-direction:column;gap:8px;margin-top:12px;">
+        <div style="display:flex;gap:8px;background:#f5f5f5;border-radius:8px;padding:10px;"><div style="width:60px;height:60px;background:#e3f2fd;border-radius:6px;flex-shrink:0;"></div><div><small><strong>文章标题文字</strong></small><br><small style="color:#999;">摘要内容预览...</small></div></div>
+        <div style="display:flex;gap:8px;background:#f5f5f5;border-radius:8px;padding:10px;"><div style="width:60px;height:60px;background:#fce4ec;border-radius:6px;flex-shrink:0;"></div><div><small><strong>文章标题文字</strong></small><br><small style="color:#999;">摘要内容预览...</small></div></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="option" data-choice="c" onclick="toggleSelect(this)">
+    <div class="letter">C</div>
+    <div class="content">
+      <h3>混合布局（推荐）</h3>
+      <p>首页顶部 Banner 轮播 + 热门推荐横向滚动 + 下方瀑布流内容卡片。整合多种内容发现方式，既有编辑推荐又有算法热度和最新内容。兼顾视觉吸引力和内容深度。</p>
+      <div style="margin-top:12px;">
+        <div style="background:#1976d2;border-radius:8px;padding:15px;color:#fff;text-align:center;margin-bottom:8px;"><small>🔥 热门推荐 Banner</small></div>
+        <div style="display:flex;gap:6px;margin-bottom:8px;"><div style="flex:1;background:#e3f2fd;border-radius:6px;padding:15px;text-align:center;"><small>热1</small></div><div style="flex:1;background:#fce4ec;border-radius:6px;padding:15px;text-align:center;"><small>热2</small></div><div style="flex:1;background:#e8f5e9;border-radius:6px;padding:15px;text-align:center;"><small>热3</small></div></div>
+        <div style="display:flex;gap:8px;"><div style="flex:1;background:#f5f5f5;border-radius:8px;padding:20px;text-align:center;"><small>📷 瀑布流卡片</small></div><div style="flex:1;background:#f5f5f5;border-radius:8px;padding:30px;text-align:center;"><small>📷 瀑布流卡片</small></div></div>
+      </div>
+    </div>
+  </div>
+</div>

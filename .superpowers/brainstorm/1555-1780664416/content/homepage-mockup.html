@@ -1,0 +1,81 @@
+<h2>首页布局（混合式）</h2>
+<p class="subtitle">Banner → 热门横滑 → 标签云入口 → 瀑布流文章卡片（无限滚动）</p>
+
+<div class="mockup">
+  <div class="mockup-header">🏠 首页 · 登录前（游客模式） vs 登录后（完整功能）</div>
+  <div class="mockup-body">
+    <!-- Header -->
+    <div class="mock-nav" style="display:flex;justify-content:space-between;">
+      <span>🌿 GreenRead</span>
+      <span style="display:flex;gap:12px;">🏷 标签云 · 🔥 热门 · ✍️ 写文章 · 👤 登录/注册</span>
+    </div>
+
+    <!-- Banner -->
+    <div style="background:linear-gradient(135deg, #2D6A4F, #52B788);padding:32px 24px;color:#fff;border-radius:0 0 20px 20px;margin-bottom:16px;">
+      <h3 style="color:#fff;margin:0;">发现好内容</h3>
+      <p style="color:rgba(255,255,255,0.85);margin:8px 0 0;">每日精选 · 热门话题 · 创作你的故事</p>
+    </div>
+
+    <!-- Hot Articles Row -->
+    <div style="margin-bottom:16px;">
+      <h4 style="margin:0 0 8px;">🔥 热门推荐</h4>
+      <div style="display:flex;gap:12px;overflow:hidden;">
+        <div style="min-width:160px;background:#F0F7F4;border-radius:12px;padding:16px;border-left:4px solid #52B788;">
+          <small style="color:#2D6A4F;"><strong>山间徒步记</strong></small><br>
+          <small style="color:#999;">👁 1.2k · ❤ 89</small>
+        </div>
+        <div style="min-width:160px;background:#F0F7F4;border-radius:12px;padding:16px;border-left:4px solid #52B788;">
+          <small style="color:#2D6A4F;"><strong>周末烘焙指南</strong></small><br>
+          <small style="color:#999;">👁 980 · ❤ 67</small>
+        </div>
+        <div style="min-width:160px;background:#F0F7F4;border-radius:12px;padding:16px;border-left:4px solid #52B788;">
+          <small style="color:#2D6A4F;"><strong>城市咖啡馆地图</strong></small><br>
+          <small style="color:#999;">👁 756 · ❤ 52</small>
+        </div>
+        <div style="min-width:160px;background:#F0F7F4;border-radius:12px;padding:16px;opacity:0.5;">→ 更多</div>
+      </div>
+    </div>
+
+    <!-- Tag Cloud snippet -->
+    <div style="display:flex;gap:8px;margin-bottom:16px;flex-wrap:wrap;">
+      <span style="background:#2D6A4F;color:#fff;padding:4px 12px;border-radius:20px;font-size:12px;">🏷 全部</span>
+      <span style="background:#E8F5E9;color:#2D6A4F;padding:4px 12px;border-radius:20px;font-size:12px;">旅行</span>
+      <span style="background:#E8F5E9;color:#2D6A4F;padding:4px 12px;border-radius:20px;font-size:12px;">美食</span>
+      <span style="background:#E8F5E9;color:#2D6A4F;padding:4px 12px;border-radius:20px;font-size:12px;">摄影</span>
+      <span style="background:#E8F5E9;color:#2D6A4F;padding:4px 12px;border-radius:20px;font-size:12px;">阅读</span>
+      <span style="background:none;color:#999;padding:4px 12px;font-size:12px;">更多 →</span>
+    </div>
+
+    <!-- Waterfall Cards -->
+    <div style="display:flex;gap:12px;">
+      <div style="flex:1;display:flex;flex-direction:column;gap:12px;">
+        <div style="background:#fff;border-radius:12px;overflow:hidden;box-shadow:0 2px 8px rgba(0,0,0,0.06);">
+          <div style="background:linear-gradient(135deg,#e8f5e9,#c8e6c9);height:100px;"></div>
+          <div style="padding:12px;"><strong>京都秋日漫步</strong><p style="color:#999;font-size:12px;margin:4px 0;">👁 2.3k · ❤ 156 · 💬 23</p></div>
+        </div>
+        <div style="background:#fff;border-radius:12px;overflow:hidden;box-shadow:0 2px 8px rgba(0,0,0,0.06);">
+          <div style="background:linear-gradient(135deg,#f1f8e9,#dcedc8);height:140px;"></div>
+          <div style="padding:12px;"><strong>阳台种菜入门</strong><p style="color:#999;font-size:12px;margin:4px 0;">👁 1.1k · ❤ 78 · 💬 12</p></div>
+        </div>
+        <div style="background:#fff;border-radius:12px;overflow:hidden;box-shadow:0 2px 8px rgba(0,0,0,0.06);">
+          <div style="background:linear-gradient(135deg,#e0f2f1,#b2dfdb);height:80px;"></div>
+          <div style="padding:12px;"><strong>极简生活日记</strong><p style="color:#999;font-size:12px;margin:4px 0;">👁 890 · ❤ 45 · 💬 8</p></div>
+        </div>
+      </div>
+      <div style="flex:1;display:flex;flex-direction:column;gap:12px;">
+        <div style="background:#fff;border-radius:12px;overflow:hidden;box-shadow:0 2px 8px rgba(0,0,0,0.06);">
+          <div style="background:linear-gradient(135deg,#f3e5f5,#e1bee7);height:130px;"></div>
+          <div style="padding:12px;"><strong>手冲咖啡日记</strong><p style="color:#999;font-size:12px;margin:4px 0;">👁 1.8k · ❤ 134 · 💬 19</p></div>
+        </div>
+        <div style="background:#fff;border-radius:12px;overflow:hidden;box-shadow:0 2px 8px rgba(0,0,0,0.06);">
+          <div style="background:linear-gradient(135deg,#fce4ec,#f8bbd0);height:90px;"></div>
+          <div style="padding:12px;"><strong>露营装备清单</strong><p style="color:#999;font-size:12px;margin:4px 0;">👁 670 · ❤ 34 · 💬 5</p></div>
+        </div>
+        <div style="background:#fff;border-radius:12px;overflow:hidden;box-shadow:0 2px 8px rgba(0,0,0,0.06);">
+          <div style="background:linear-gradient(135deg,#e8eaf6,#c5cae9);height:160px;"></div>
+          <div style="padding:12px;"><strong>自然观察笔记</strong><p style="color:#999;font-size:12px;margin:4px 0;">👁 2.1k · ❤ 189 · 💬 31</p></div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
