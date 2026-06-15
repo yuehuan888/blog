@@ -4,13 +4,13 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## 项目简介
 
-个人博客系统后端 API，支持文章管理、点赞收藏、阅读统计与热门排行、标签系统、评论系统、用户认证与权限管理。采用 Spring Boot + MyBatis-Plus + JWT 构建，Redis/RabbitMQ 通过降级机制实现本地零依赖开发。
+个人博客系统后端 API，支持文章管理、点赞收藏、阅读统计与热门排行、标签系统、评论系统、用户认证与权限管理。采用 Spring Boot + MyBatis-Plus + JWT 构建，**Redis 为必需依赖**（用于缓存、热榜、阅读去重、点赞/收藏状态）。
 
 ## 技术栈
 
 - Java 17, Spring Boot 3.2.5, MyBatis-Plus 3.5.6
 - 数据库：MySQL（生产）/ H2（测试）
-- 缓存：StringRedisTemplate 手动控制（本地无 Redis 时自动降级查库）
+- 缓存：Redis（StringRedisTemplate 手动控制），不再支持无 Redis 模式
 - 消息队列：RabbitMQ（可选，默认排除自动配置）
 - 构建：Maven
 
@@ -102,18 +102,60 @@ com.blog
 - 下划线映射：`map-underscore-to-camel-case: true`
 - SQL 日志：`StdOutImpl` 输出到控制台
 
-## 鉴权规则（2026-06-07 更新）
+## 鉴权规则（2026-06-16 更新）
 
 | 请求方法 | 鉴权要求 | 说明 |
 |---------|---------|------|
-| GET | **可选** | 携带有效 token 则识别用户身份，无 token 以匿名访问。适用于浏览文章、标签云、评论等公开内容 |
-| POST/PUT/PATCH/DELETE | **强制** | 必须携带有效 JWT，否则返回 401。适用于创建文章、点赞收藏、发表评论等写操作 |
+| GET | **可选** | 携带有效 token 则识别用户身份，无 token 以匿名访问 |
+| POST/PUT/PATCH/DELETE | **强制** | 必须携带有效 JWT，否则返回 401 |
 | `/api/auth/**` | 无需 | 注册、登录、登出接口免鉴权 |
+
+### 权限模型（Service 层校验）
+| 操作 | 权限 |
+|------|------|
+| 删除文章 | 作者本人 或 管理员（`AuthContext.isAdmin()`） |
+| 设置文章标签 | 作者本人 或 管理员（不再仅限管理员） |
+| 创建/编辑/删除标签 | 仅管理员 |
+| 管理评论 | 仅管理员 |
 
 ### CORS 配置
 - `WebMvcConfig.addCorsMappings()` 允许所有来源跨域访问 `/api/**`
 - 支持 GET/POST/PUT/PATCH/DELETE/OPTIONS 方法
 - 开发环境前端 `localhost:3000` → 后端 `localhost:8080`
+
+## 文章删除（级联清理）
+
+`ArticleServiceImpl.removeById()` 删除文章时**完整清理所有关联数据**：
+
+1. 删除 article_tag 关联 + 更新 tag.article_count
+2. 删除 article_like 全部记录
+3. 删除 article_favorite 全部记录
+4. 删除 article_read 全部记录
+5. 删除 comment_like（通过 commentId）+ 删除 comment
+6. 删除 article_history 全部记录
+7. 删除 article 本身
+8. 清理 Redis：article 缓存、like/favorite Set、hot ZSET、categoryStats、tag cloud
+
+新增 Mapper 方法：`ArticleLikeMapper.deleteByArticleId`、`ArticleFavoriteMapper.deleteByArticleId`、`CommentMapper.deleteByArticleId`/`selectIdsByArticleId`、`CommentLikeMapper.deleteByCommentIds`
+
+## 查询参数
+
+`ArticleQueryDTO` 支持以下筛选参数：
+- `page`, `size`：分页（默认 1/10）
+- `category`, `status`, `keyword`：分类/状态/关键词过滤
+- `tagId`：按标签筛选（JOIN article_tag 表）
+- `authorId`：按作者筛选（用于个人主页）
+
+## 标签系统变更
+
+- `ArticleTagServiceImpl.setTags()`：权限放宽为「作者本人或管理员」
+- `TagServiceImpl.getCloud()`：**直接查库，不使用缓存**（保证数据实时准确）
+- `HotArticleScheduler`：新增 `@PostConstruct` 启动时全量重建 ZSET
+- `ArticleReadEventListener`：异步写 DB 后删除文章缓存，保证阅读数及时更新
+
+## 评论系统变更
+
+- `CommentDTO` 新增 `liked` 字段，`toDTO()` 自动判断当前用户是否已点赞该评论
 
 ## REST API 端点
 
