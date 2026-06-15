@@ -215,6 +215,13 @@ public class CommentServiceImpl implements CommentService {
         dto.setCreatedAt(c.getCreatedAt());
         dto.setReplies(List.of());
         dto.setReplyCount(0);
+
+        // Check if current user liked this comment
+        Long currentUserId = AuthContext.getUserId();
+        if (currentUserId != null) {
+            dto.setLiked(commentLikeMapper.selectByCommentAndUser(c.getId(), currentUserId) != null);
+        }
+
         return dto;
     }
 

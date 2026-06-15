@@ -6,7 +6,6 @@ import com.blog.entity.ArticleLike;
 import com.blog.mapper.ArticleLikeMapper;
 import com.blog.mapper.ArticleMapper;
 import com.blog.service.ArticleLikeService;
-import com.blog.service.ArticleService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -27,16 +26,17 @@ public class ArticleLikeServiceImpl implements ArticleLikeService {
     @Autowired
     private ArticleMapper articleMapper;
 
-    @Autowired
-    private ArticleService articleService;
-
     @Autowired(required = false)
     private StringRedisTemplate redisTemplate;
 
     @Override
     @Transactional
     public ToggleResult toggle(Long articleId, Long userId) {
-        Article article = articleService.getById(articleId);
+        // Verify article exists (bypass cache for fresh data)
+        Article article = articleMapper.selectById(articleId);
+        if (article == null) {
+            throw new RuntimeException("Article not found: " + articleId);
+        }
 
         boolean isLiked;
         try {
@@ -49,13 +49,33 @@ public class ArticleLikeServiceImpl implements ArticleLikeService {
         if (isLiked) {
             unlike(articleId, userId);
             articleMapper.decrementLikeCount(articleId);
-            article.setLikeCount(article.getLikeCount() - 1);
-            return new ToggleResult(false, article.getLikeCount());
         } else {
             like(articleId, userId);
             articleMapper.incrementLikeCount(articleId);
-            article.setLikeCount(article.getLikeCount() + 1);
-            return new ToggleResult(true, article.getLikeCount());
+        }
+
+        // Read fresh count from DB, not cache
+        Article fresh = articleMapper.selectById(articleId);
+        boolean newState = !isLiked;
+
+        // Invalidate article cache so next load gets fresh count
+        if (redisTemplate != null) {
+            try {
+                redisTemplate.delete("article::" + articleId);
+            } catch (Exception e) {
+                log.warn("Failed to delete article cache: articleId={}", articleId, e);
+            }
+        }
+
+        return new ToggleResult(newState, fresh.getLikeCount());
+    }
+
+    @Override
+    public boolean isLiked(Long articleId, Long userId) {
+        try {
+            return checkRedis(articleId, userId);
+        } catch (Exception e) {
+            return checkDb(articleId, userId);
         }
     }
 

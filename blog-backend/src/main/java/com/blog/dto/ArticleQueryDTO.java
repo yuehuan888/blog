@@ -11,4 +11,5 @@ public class ArticleQueryDTO {
     private String status;
     private String keyword;
     private Long tagId;
+    private Long authorId;
 }

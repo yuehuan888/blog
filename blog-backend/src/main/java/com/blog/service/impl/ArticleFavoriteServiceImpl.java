@@ -6,7 +6,6 @@ import com.blog.entity.ArticleFavorite;
 import com.blog.mapper.ArticleFavoriteMapper;
 import com.blog.mapper.ArticleMapper;
 import com.blog.service.ArticleFavoriteService;
-import com.blog.service.ArticleService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -27,16 +26,17 @@ public class ArticleFavoriteServiceImpl implements ArticleFavoriteService {
     @Autowired
     private ArticleMapper articleMapper;
 
-    @Autowired
-    private ArticleService articleService;
-
     @Autowired(required = false)
     private StringRedisTemplate redisTemplate;
 
     @Override
     @Transactional
     public ToggleResult toggle(Long articleId, Long userId) {
-        Article article = articleService.getById(articleId);
+        // Verify article exists (bypass cache for fresh data)
+        Article article = articleMapper.selectById(articleId);
+        if (article == null) {
+            throw new RuntimeException("Article not found: " + articleId);
+        }
 
         boolean isFavorited;
         try {
@@ -49,13 +49,33 @@ public class ArticleFavoriteServiceImpl implements ArticleFavoriteService {
         if (isFavorited) {
             unfavorite(articleId, userId);
             articleMapper.decrementFavoriteCount(articleId);
-            article.setFavoriteCount(article.getFavoriteCount() - 1);
-            return new ToggleResult(false, article.getFavoriteCount());
         } else {
             favorite(articleId, userId);
             articleMapper.incrementFavoriteCount(articleId);
-            article.setFavoriteCount(article.getFavoriteCount() + 1);
-            return new ToggleResult(true, article.getFavoriteCount());
+        }
+
+        // Read fresh count from DB, not cache
+        Article fresh = articleMapper.selectById(articleId);
+        boolean newState = !isFavorited;
+
+        // Invalidate article cache so next load gets fresh count
+        if (redisTemplate != null) {
+            try {
+                redisTemplate.delete("article::" + articleId);
+            } catch (Exception e) {
+                log.warn("Failed to delete article cache: articleId={}", articleId, e);
+            }
+        }
+
+        return new ToggleResult(newState, fresh.getFavoriteCount());
+    }
+
+    @Override
+    public boolean isFavorited(Long articleId, Long userId) {
+        try {
+            return checkRedis(articleId, userId);
+        } catch (Exception e) {
+            return checkDb(articleId, userId);
         }
     }
 

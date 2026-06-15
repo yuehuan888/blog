@@ -55,7 +55,7 @@ export function toggleFavorite(id: number) {
 }
 
 export function getArticleStats(id: number) {
-  return api.get<Record<string, number>>(`/api/articles/${id}/stats`)
+  return api.get<Record<string, any>>(`/api/articles/${id}/stats`)
 }
 
 export function getArticleTags(id: number) {

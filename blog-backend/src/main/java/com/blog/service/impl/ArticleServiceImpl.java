@@ -122,7 +122,8 @@ public class ArticleServiceImpl extends ServiceImpl<ArticleMapper, Article> impl
                     query.getTagId(),
                     query.getCategory(),
                     tagStatus,
-                    query.getKeyword());
+                    query.getKeyword(),
+                    query.getAuthorId());
         }
 
         LambdaQueryWrapper<Article> wrapper = new LambdaQueryWrapper<>();
@@ -140,6 +141,9 @@ public class ArticleServiceImpl extends ServiceImpl<ArticleMapper, Article> impl
                     .like(Article::getTitle, query.getKeyword())
                     .or()
                     .like(Article::getContent, query.getKeyword()));
+        }
+        if (query.getAuthorId() != null) {
+            wrapper.eq(Article::getAuthorId, query.getAuthorId());
         }
         wrapper.orderByDesc(Article::getCreatedAt);
 

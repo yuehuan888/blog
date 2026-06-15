@@ -103,13 +103,21 @@ public class ArticleController {
     }
 
     @GetMapping("/{id}/stats")
-    public Result<Map<String, Integer>> stats(@PathVariable Long id) {
+    public Result<Map<String, Object>> stats(@PathVariable Long id) {
         Article article = articleService.getById(id);
-        Map<String, Integer> stats = new HashMap<>();
+        Long currentUserId = AuthContext.getUserId();
+        Map<String, Object> stats = new HashMap<>();
         stats.put("likeCount", article.getLikeCount());
         stats.put("favoriteCount", article.getFavoriteCount());
         stats.put("readCount", article.getReadCount());
         stats.put("commentCount", article.getCommentCount());
+        if (currentUserId != null) {
+            stats.put("liked", articleLikeService.isLiked(id, currentUserId));
+            stats.put("favorited", articleFavoriteService.isFavorited(id, currentUserId));
+        } else {
+            stats.put("liked", false);
+            stats.put("favorited", false);
+        }
         return Result.ok(stats);
     }
 

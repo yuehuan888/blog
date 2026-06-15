@@ -21,9 +21,12 @@
 
         <!-- Actions -->
         <div v-if="comment.status === 'visible'" class="flex items-center gap-4 text-xs text-text-secondary">
-          <NButton text size="tiny" @click="handleLike">
+          <NButton text size="tiny" @click="handleLike" :type="comment.liked ? 'error' : 'default'">
             <template #icon>
-              <NIcon size="14"><HeartOutline /></NIcon>
+              <NIcon size="14">
+                <Heart v-if="comment.liked" />
+                <HeartOutline v-else />
+              </NIcon>
             </template>
             {{ comment.likeCount }}
           </NButton>
@@ -76,7 +79,7 @@
 
 <script setup lang="ts">
 import { NButton, NTag, NIcon, useMessage } from 'naive-ui'
-import { HeartOutline } from '@vicons/ionicons5'
+import { HeartOutline, Heart } from '@vicons/ionicons5'
 import { toggleCommentLike, deleteComment } from '~/api/modules/comment'
 import { useAuthStore } from '~/stores/auth'
 import type { CommentDTO } from '~/types'
@@ -114,10 +117,21 @@ function formatDate(dateStr: string): string {
 }
 
 async function handleLike() {
+  const prevLiked = props.comment.liked
+  const prevCount = props.comment.likeCount
+  // Optimistic update
+  props.comment.liked = !props.comment.liked
+  props.comment.likeCount += props.comment.liked ? 1 : -1
+
   try {
-    await toggleCommentLike(props.comment.id)
-    props.comment.likeCount++
+    const result = await toggleCommentLike(props.comment.id)
+    // Use server authoritative values
+    props.comment.liked = result.liked
+    props.comment.likeCount = result.count
   } catch {
+    // Rollback on failure
+    props.comment.liked = prevLiked
+    props.comment.likeCount = prevCount
     message.error('操作失败')
   }
 }

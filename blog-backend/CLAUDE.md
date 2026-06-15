@@ -102,9 +102,22 @@ com.blog
 - 下划线映射：`map-underscore-to-camel-case: true`
 - SQL 日志：`StdOutImpl` 输出到控制台
 
+## 鉴权规则（2026-06-07 更新）
+
+| 请求方法 | 鉴权要求 | 说明 |
+|---------|---------|------|
+| GET | **可选** | 携带有效 token 则识别用户身份，无 token 以匿名访问。适用于浏览文章、标签云、评论等公开内容 |
+| POST/PUT/PATCH/DELETE | **强制** | 必须携带有效 JWT，否则返回 401。适用于创建文章、点赞收藏、发表评论等写操作 |
+| `/api/auth/**` | 无需 | 注册、登录、登出接口免鉴权 |
+
+### CORS 配置
+- `WebMvcConfig.addCorsMappings()` 允许所有来源跨域访问 `/api/**`
+- 支持 GET/POST/PUT/PATCH/DELETE/OPTIONS 方法
+- 开发环境前端 `localhost:3000` → 后端 `localhost:8080`
+
 ## REST API 端点
 
-所有接口统一返回 `Result<T>`（code + message + data）。用户身份通过请求头 `Authorization: Bearer <JWT>` 传入。认证接口（/api/auth/**）无需 token，其余接口均需携带有效 JWT。
+所有接口统一返回 `Result<T>`（code + message + data）。
 
 | 方法 | 路径 | 说明 |
 |------|------|------|

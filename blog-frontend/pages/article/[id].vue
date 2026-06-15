@@ -22,6 +22,14 @@
 
     <!-- Content -->
     <template v-else-if="article">
+      <!-- Back Button -->
+      <NButton text size="small" @click="router.back()" class="mb-4">
+        <template #icon>
+          <NIcon size="18"><ArrowBackOutline /></NIcon>
+        </template>
+        返回
+      </NButton>
+
       <!-- Title -->
       <h1 class="text-2xl md:text-3xl font-bold mb-2">{{ article.title }}</h1>
 
@@ -37,12 +45,7 @@
       <!-- Stats Bar -->
       <ArticleStats
         :article-id="article.id"
-        :stats="{
-          readCount: article.readCount,
-          likeCount: article.likeCount,
-          favoriteCount: article.favoriteCount,
-          commentCount: article.commentCount,
-        }"
+        :stats="articleStats"
         class="mb-6"
       />
 
@@ -66,8 +69,9 @@
 </template>
 
 <script setup lang="ts">
-import { NResult, NButton } from 'naive-ui'
-import { getArticleById, getArticleTags } from '~/api/modules/article'
+import { NResult, NButton, NIcon } from 'naive-ui'
+import { ArrowBackOutline } from '@vicons/ionicons5'
+import { getArticleById, getArticleTags, getArticleStats } from '~/api/modules/article'
 import type { Article, Tag } from '~/types'
 
 const route = useRoute()
@@ -75,6 +79,7 @@ const router = useRouter()
 
 const article = ref<Article | null>(null)
 const tags = ref<Tag[]>([])
+const articleStats = ref<Record<string, any>>({})
 const loading = ref(true)
 const error = ref<string | null>(null)
 
@@ -103,8 +108,14 @@ async function fetchArticle() {
   loading.value = true
   error.value = null
   try {
-    article.value = await getArticleById(articleId.value)
-    tags.value = await getArticleTags(articleId.value)
+    const [articleData, tagsData, statsData] = await Promise.all([
+      getArticleById(articleId.value),
+      getArticleTags(articleId.value),
+      getArticleStats(articleId.value),
+    ])
+    article.value = articleData
+    tags.value = tagsData
+    articleStats.value = statsData
   } catch (err: any) {
     error.value = err.message || '加载文章失败'
   } finally {

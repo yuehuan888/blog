@@ -44,13 +44,19 @@ import { toggleLike, toggleFavorite } from '~/api/modules/article'
 
 const props = defineProps<{
   articleId: number
-  stats: Record<string, number>
+  stats: Record<string, any>
 }>()
 
 const message = useMessage()
 
-const likeState = reactive({ liked: false, count: props.stats.likeCount ?? 0 })
-const favoriteState = reactive({ liked: false, count: props.stats.favoriteCount ?? 0 })
+const likeState = reactive({
+  liked: (props.stats.liked as boolean) ?? false,
+  count: (props.stats.likeCount as number) ?? 0,
+})
+const favoriteState = reactive({
+  liked: (props.stats.favorited as boolean) ?? false,
+  count: (props.stats.favoriteCount as number) ?? 0,
+})
 
 async function handleLike() {
   const prevLiked = likeState.liked

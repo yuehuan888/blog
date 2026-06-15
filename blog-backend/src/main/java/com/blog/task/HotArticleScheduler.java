@@ -1,6 +1,7 @@
 package com.blog.task;
 
 import com.blog.mapper.ArticleReadMapper;
+import jakarta.annotation.PostConstruct;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -25,6 +26,15 @@ public class HotArticleScheduler {
 
     @Autowired(required = false)
     private StringRedisTemplate redisTemplate;
+
+    /**
+     * Populate hot ZSETs on startup so rankings are immediately available
+     * and both 7-day and 30-day scores are consistent with database data.
+     */
+    @PostConstruct
+    public void init() {
+        rebuildHotZsets();
+    }
 
     @Scheduled(cron = "0 0 * * * ?")
     public void rebuildHotZsets() {

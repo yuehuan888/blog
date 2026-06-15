@@ -33,6 +33,7 @@ export interface Comment {
   likeCount: number
   status: 'visible' | 'hidden' | 'deleted'
   createdAt: string
+  liked: boolean
 }
 
 export interface CommentDTO extends Comment {
@@ -90,6 +91,7 @@ export interface ArticleQueryParams {
   status?: string
   keyword?: string
   tagId?: number
+  authorId?: number
 }
 
 export interface HotArticleDTO {

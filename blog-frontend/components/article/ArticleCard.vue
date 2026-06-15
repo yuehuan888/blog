@@ -28,6 +28,21 @@
         {{ article.category }}
       </NTag>
 
+      <!-- Article Tags -->
+      <div v-if="tags.length > 0" class="flex gap-1 mb-2 flex-wrap">
+        <NTag
+          v-for="tag in tags"
+          :key="tag.id"
+          size="tiny"
+          :bordered="false"
+          type="success"
+          class="cursor-pointer"
+          @click.stop="navigateTo(`/tag/${tag.id}`)"
+        >
+          {{ tag.name }}
+        </NTag>
+      </div>
+
       <!-- Meta -->
       <div class="flex items-center justify-between text-xs text-text-secondary">
         <div class="flex items-center gap-3">
@@ -52,11 +67,14 @@
 <script setup lang="ts">
 import { NCard, NTag, NIcon } from 'naive-ui'
 import { EyeOutline, HeartOutline, ChatbubbleOutline } from '@vicons/ionicons5'
-import type { Article } from '~/types'
+import { getArticleTags } from '~/api/modules/article'
+import type { Article, Tag } from '~/types'
 
 const props = defineProps<{
   article: Article
 }>()
+
+const tags = ref<Tag[]>([])
 
 const emojis = ['📝', '🌿', '📷', '🎨', '🍃', '✨', '📖', '🌸', '🌲', '🖋️']
 
@@ -70,4 +88,15 @@ function formatCount(n: number): string {
   if (n >= 1000) return (n / 1000).toFixed(1) + 'k'
   return String(n)
 }
+
+// Fetch tags for this article
+async function fetchTags() {
+  try {
+    tags.value = await getArticleTags(props.article.id)
+  } catch {
+    // Non-critical, silently fail
+  }
+}
+
+onMounted(fetchTags)
 </script>

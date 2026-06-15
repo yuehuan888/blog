@@ -23,4 +23,5 @@ public class CommentDTO {
     private LocalDateTime createdAt;
     private List<CommentDTO> replies;
     private int replyCount;
+    private boolean liked;
 }

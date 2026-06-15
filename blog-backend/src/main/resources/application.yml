@@ -9,21 +9,18 @@ spring:
       mode: always
       schema-locations: classpath:schema.sql
   cache:
-    type: simple
+    type: redis
+  data:
+    redis:
+      host: localhost
+      port: 6379
+      timeout: 3s
   autoconfigure:
     exclude:
       - org.springframework.boot.autoconfigure.amqp.RabbitAutoConfiguration
 
-# 本地没有 Redis/RabbitMQ 时已做降级：
-#   - 缓存使用内存版 (type: simple)
-#   - RabbitMQ 自动配置已排除
-# 如果需要启用 Redis，取消下面注释并把 cache.type 改为 redis：
-#  data:
-#    redis:
-#      host: localhost
-#      port: 6379
-#      timeout: 3s
-# 如果需要启用 RabbitMQ，删除上面的 autoconfigure.exclude 并取消下面注释：
+# Redis 已启用（本地 localhost:6379）
+# RabbitMQ 自动配置已排除，如需启用请删除上面的 exclude：
 #  rabbitmq:
 #    host: localhost
 #    port: 5672
