@@ -148,7 +148,7 @@ async function loadMore() {
 
 async function fetchTags() {
   try {
-    tags.value = (await getTagCloud('count')).slice(0, 8)
+    tags.value = (await getTagCloud('count')).slice(0, 20)
   } catch {
     // Non-critical
   }

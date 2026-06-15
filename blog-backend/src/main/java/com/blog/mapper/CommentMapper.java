@@ -2,6 +2,7 @@ package com.blog.mapper;
 
 import com.baomidou.mybatisplus.core.mapper.BaseMapper;
 import com.blog.entity.Comment;
+import org.apache.ibatis.annotations.Delete;
 import org.apache.ibatis.annotations.Mapper;
 import org.apache.ibatis.annotations.Param;
 import org.apache.ibatis.annotations.Select;
@@ -24,9 +25,15 @@ public interface CommentMapper extends BaseMapper<Comment> {
     @Select("SELECT COUNT(*) FROM comment WHERE parent_id = #{parentId} AND status = 'visible'")
     int countReplies(@Param("parentId") Long parentId);
 
+    @Select("SELECT id FROM comment WHERE article_id = #{articleId}")
+    List<Long> selectIdsByArticleId(@Param("articleId") Long articleId);
+
     @Update("UPDATE comment SET like_count = like_count + 1 WHERE id = #{id}")
     int incrementLikeCount(@Param("id") Long id);
 
     @Update("UPDATE comment SET like_count = like_count - 1 WHERE id = #{id} AND like_count > 0")
     int decrementLikeCount(@Param("id") Long id);
+
+    @Delete("DELETE FROM comment WHERE article_id = #{articleId}")
+    int deleteByArticleId(@Param("articleId") Long articleId);
 }

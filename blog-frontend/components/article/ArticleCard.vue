@@ -18,17 +18,7 @@
         {{ article.title }}
       </h3>
 
-      <!-- Category Tag -->
-      <NTag
-        v-if="article.category"
-        size="tiny"
-        :bordered="false"
-        class="mb-2"
-      >
-        {{ article.category }}
-      </NTag>
-
-      <!-- Article Tags -->
+      <!-- Article Tags (replaces standalone category tag) -->
       <div v-if="tags.length > 0" class="flex gap-1 mb-2 flex-wrap">
         <NTag
           v-for="tag in tags"

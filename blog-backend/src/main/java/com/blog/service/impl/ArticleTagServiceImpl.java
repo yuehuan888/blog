@@ -1,5 +1,6 @@
 package com.blog.service.impl;
 
+import com.blog.entity.Article;
 import com.blog.entity.ArticleTag;
 import com.blog.entity.Tag;
 import com.blog.mapper.ArticleMapper;
@@ -38,13 +39,19 @@ public class ArticleTagServiceImpl implements ArticleTagService {
     @Override
     @Transactional
     public void setTags(Long articleId, List<Long> tagIds) {
-        if (!AuthContext.isAdmin()) {
-            throw new RuntimeException("Admin access required");
+        // Verify article exists and check permission
+        Article article = articleMapper.selectById(articleId);
+        if (article == null) {
+            throw new RuntimeException("Article not found: " + articleId);
         }
 
-        // 校验文章存在
-        if (articleMapper.selectById(articleId) == null) {
-            throw new RuntimeException("Article not found: " + articleId);
+        Long currentUserId = AuthContext.getUserId();
+        if (currentUserId == null) {
+            throw new RuntimeException("Authentication required");
+        }
+        // Article author OR admin can set tags
+        if (!AuthContext.isAdmin() && !article.getAuthorId().equals(currentUserId)) {
+            throw new RuntimeException("Only the article author or admin can set tags");
         }
 
         if (tagIds == null || tagIds.isEmpty()) {

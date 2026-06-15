@@ -69,6 +69,10 @@ export const useAuthStore = defineStore('auth', () => {
   }
 
   async function logout() {
+    // Clear user's local draft before logging out
+    if (import.meta.client && user.value?.userId) {
+      localStorage.removeItem(`article_draft_${user.value.userId}`)
+    }
     try {
       await authApi.logout()
     } catch {

@@ -14,4 +14,7 @@ public interface ArticleFavoriteMapper extends BaseMapper<ArticleFavorite> {
 
     @Delete("DELETE FROM article_favorite WHERE user_id = #{userId} AND article_id = #{articleId}")
     int deleteByUserAndArticle(@Param("userId") Long userId, @Param("articleId") Long articleId);
+
+    @Delete("DELETE FROM article_favorite WHERE article_id = #{articleId}")
+    int deleteByArticleId(@Param("articleId") Long articleId);
 }

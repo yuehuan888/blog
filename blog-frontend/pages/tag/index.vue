@@ -17,6 +17,13 @@
       </template>
     </NResult>
 
+    <EmptyState
+      v-else-if="tags.length === 0"
+      description="还没有标签，请联系管理员创建"
+      action-label="标签管理（管理员）"
+      @action="navigateTo('/admin/tags')"
+    />
+
     <div v-else class="flex flex-wrap gap-3">
       <NTag
         v-for="tag in tags"

@@ -25,11 +25,23 @@
           :key="article.id"
           size="small"
           :bordered="false"
-          class="cursor-pointer hover:shadow-md transition-shadow opacity-70"
-          @click="navigateTo(`/article/write?edit=${article.id}`)"
+          class="hover:shadow-md transition-shadow opacity-70"
         >
           <div class="p-2">
-            <h3 class="text-sm font-bold line-clamp-2 mb-1">{{ article.title || '未命名草稿' }}</h3>
+            <div class="flex items-start justify-between gap-2">
+              <h3
+                class="text-sm font-bold line-clamp-2 mb-1 flex-1 cursor-pointer"
+                @click="navigateTo(`/article/write?edit=${article.id}`)"
+              >
+                {{ article.title || '未命名草稿' }}
+              </h3>
+              <NPopconfirm @positive-click="handleDelete(article.id)">
+                <template #trigger>
+                  <NButton text size="tiny" type="error" @click.stop>✕</NButton>
+                </template>
+                确定删除此草稿？此操作不可撤销。
+              </NPopconfirm>
+            </div>
             <p class="text-xs text-text-secondary">{{ formatDate(article.updatedAt) }} 更新</p>
           </div>
         </NCard>
@@ -52,7 +64,26 @@
 
     <template v-else>
       <div class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
-        <ArticleCard v-for="article in publishedArticles" :key="article.id" :article="article" />
+        <div v-for="article in publishedArticles" :key="article.id" class="relative group">
+          <ArticleCard :article="article" />
+          <!-- Delete button (own articles or admin) -->
+          <NPopconfirm
+            v-if="canDelete"
+            @positive-click="handleDelete(article.id)"
+          >
+            <template #trigger>
+              <NButton
+                size="tiny"
+                type="error"
+                class="absolute top-1 right-1 opacity-0 group-hover:opacity-100 transition-opacity"
+                @click.stop
+              >
+                ✕
+              </NButton>
+            </template>
+            确定删除此文章？所有评论、点赞数据将被一并删除。
+          </NPopconfirm>
+        </div>
       </div>
 
       <NPagination
@@ -67,13 +98,14 @@
 </template>
 
 <script setup lang="ts">
-import { NCard, NButton, NPagination } from 'naive-ui'
-import { getArticles } from '~/api/modules/article'
+import { NCard, NButton, NPagination, NPopconfirm, useMessage } from 'naive-ui'
+import { getArticles, deleteArticle } from '~/api/modules/article'
 import { useAuthStore } from '~/stores/auth'
 import type { Article } from '~/types'
 
 const route = useRoute()
 const authStore = useAuthStore()
+const message = useMessage()
 
 const profileUserId = computed(() => Number(route.params.id))
 const profileUsername = ref('')
@@ -85,6 +117,7 @@ const currentPage = ref(1)
 const totalPages = ref(1)
 
 const isOwnProfile = computed(() => authStore.user?.userId === profileUserId.value)
+const canDelete = computed(() => isOwnProfile.value || authStore.isAdmin)
 
 function formatDate(dateStr: string): string {
   const d = new Date(dateStr)
@@ -100,7 +133,6 @@ function formatDate(dateStr: string): string {
 async function fetchArticles() {
   loading.value = true
   try {
-    // Fetch published articles
     const published = await getArticles({
       page: currentPage.value,
       size: 12,
@@ -111,7 +143,6 @@ async function fetchArticles() {
     publishedCount.value = published.total || 0
     totalPages.value = published.pages || 1
 
-    // Fetch draft articles (only visible for own profile)
     if (isOwnProfile.value) {
       const drafts = await getArticles({
         page: 1,
@@ -120,15 +151,21 @@ async function fetchArticles() {
         authorId: profileUserId.value,
       })
       draftArticles.value = drafts.records || []
-      // Extract username from first article's author info (not directly available)
-      if (published.records && published.records.length > 0) {
-        profileUsername.value = '' // We don't have username in article, use userId
-      }
     }
   } catch {
     // handled
   } finally {
     loading.value = false
+  }
+}
+
+async function handleDelete(articleId: number) {
+  try {
+    await deleteArticle(articleId)
+    message.success('已删除')
+    await fetchArticles()
+  } catch (err: any) {
+    message.error(err.message || '删除失败')
   }
 }
 

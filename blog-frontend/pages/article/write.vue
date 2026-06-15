@@ -3,7 +3,12 @@
     <NCard>
       <template #header>
         <div class="flex items-center justify-between">
-          <h2 class="text-lg font-bold">{{ isEdit ? '编辑文章' : '写文章' }}</h2>
+          <div class="flex items-center gap-3">
+            <NButton text size="small" @click="router.back()">
+              <template #icon><NIcon size="18"><ArrowBackOutline /></NIcon></template>
+            </NButton>
+            <h2 class="text-lg font-bold">{{ isEdit ? '编辑文章' : '写文章' }}</h2>
+          </div>
           <NSpace>
             <NButton @click="saveDraft" :loading="saving">保存草稿</NButton>
             <NButton type="primary" @click="publish" :loading="saving">发布</NButton>
@@ -20,23 +25,19 @@
           />
         </NFormItem>
 
-        <NFormItem path="category" label="分类">
-          <NInput
-            v-model:value="form.category"
-            placeholder="例如：旅行、美食、技术..."
-          />
-        </NFormItem>
-
-        <NFormItem path="tags" label="标签">
+        <NFormItem path="tags" label="分类标签">
           <NSelect
             v-model:value="selectedTagIds"
             :options="tagOptions"
             multiple
-            placeholder="选择标签（可选，最多5个）"
+            placeholder="选择分类标签（必选，最多5个）"
             :max-tag-count="5"
             filterable
             clearable
           />
+          <template #feedback>
+            <span class="text-xs text-text-secondary">选中的第一个标签将作为文章分类</span>
+          </template>
         </NFormItem>
 
         <NFormItem path="content" label="内容">
@@ -53,7 +54,8 @@
 </template>
 
 <script setup lang="ts">
-import { NCard, NForm, NFormItem, NInput, NButton, NSelect, NSpace, useMessage } from 'naive-ui'
+import { NCard, NForm, NFormItem, NInput, NButton, NIcon, NSelect, NSpace, useMessage } from 'naive-ui'
+import { ArrowBackOutline } from '@vicons/ionicons5'
 import type { FormInst, FormRules } from 'naive-ui'
 import { createArticle, updateArticle, getArticleById, getArticleTags, setArticleTags } from '~/api/modules/article'
 import { getTagCloud } from '~/api/modules/tag'
@@ -74,12 +76,13 @@ const isEdit = ref(false)
 
 const form = reactive({
   title: '',
-  category: '',
   content: '',
 })
 
 const selectedTagIds = ref<number[]>([])
 const tagOptions = ref<{ label: string; value: number }[]>([])
+// Map tag id to name for category derivation
+const tagNameMap = ref<Record<number, string>>({})
 
 const rules: FormRules = {
   title: [
@@ -96,10 +99,22 @@ const editId = computed(() => {
   return id ? Number(id) : null
 })
 
+// User-specific draft key prevents leaking drafts between users
+const draftKey = computed(() => `article_draft_${authStore.user?.userId || 'anonymous'}`)
+
+// Derive category from first selected tag
+function getCategory(): string {
+  if (selectedTagIds.value.length === 0) return ''
+  return tagNameMap.value[selectedTagIds.value[0]] || ''
+}
+
 async function fetchTags() {
   try {
     const tags = await getTagCloud('count')
-    tagOptions.value = tags.map(t => ({ label: t.name, value: t.id }))
+    tagOptions.value = tags.map(t => {
+      tagNameMap.value[t.id] = t.name
+      return { label: t.name, value: t.id }
+    })
   } catch {
     // non-critical
   }
@@ -107,12 +122,11 @@ async function fetchTags() {
 
 function loadDraft() {
   if (import.meta.client) {
-    const draft = localStorage.getItem('article_draft')
+    const draft = localStorage.getItem(draftKey.value)
     if (draft) {
       try {
         const data = JSON.parse(draft)
         form.title = data.title || ''
-        form.category = data.category || ''
         form.content = data.content || ''
         if (data.tagIds) selectedTagIds.value = data.tagIds
       } catch {}
@@ -121,10 +135,9 @@ function loadDraft() {
 }
 
 function saveDraftToLocal() {
-  if (import.meta.client) {
-    localStorage.setItem('article_draft', JSON.stringify({
+  if (import.meta.client && authStore.user?.userId) {
+    localStorage.setItem(draftKey.value, JSON.stringify({
       title: form.title,
-      category: form.category,
       content: form.content,
       tagIds: selectedTagIds.value,
     }))
@@ -133,7 +146,7 @@ function saveDraftToLocal() {
 
 function clearDraft() {
   if (import.meta.client) {
-    localStorage.removeItem('article_draft')
+    localStorage.removeItem(draftKey.value)
   }
 }
 
@@ -158,7 +171,6 @@ async function fetchArticleForEdit() {
   try {
     const article = await getArticleById(editId.value!)
     form.title = article.title
-    form.category = article.category || ''
     form.content = article.content
     // Load existing tags
     const tags = await getArticleTags(editId.value!)
@@ -168,38 +180,47 @@ async function fetchArticleForEdit() {
   }
 }
 
-async function saveDraft() {
+async function saveArticle(status: 'draft' | 'published') {
   saving.value = true
   try {
+    const category = getCategory()
+    let articleId: number
+
     if (isEdit.value && editId.value) {
-      await updateArticle(editId.value, {
-        title: form.title || '未命名草稿',
-        category: form.category,
-        content: form.content,
-        status: 'draft',
-      })
-      if (selectedTagIds.value.length > 0) {
-        await setArticleTags(editId.value, selectedTagIds.value)
-      }
-      message.success('草稿已保存')
+      await updateArticle(editId.value, { title: form.title, category, content: form.content, status })
+      articleId = editId.value
     } else {
-      const article = await createArticle({
-        title: form.title || '未命名草稿',
-        category: form.category,
-        content: form.content,
-        status: 'draft',
-      })
-      if (selectedTagIds.value.length > 0) {
-        await setArticleTags(article.id, selectedTagIds.value)
-      }
-      message.success('草稿已保存到服务器')
+      const article = await createArticle({ title: form.title, category, content: form.content, status })
+      articleId = article.id
     }
+
+    // Assign tags
+    if (selectedTagIds.value.length > 0) {
+      await setArticleTags(articleId, selectedTagIds.value)
+    }
+
+    if (status === 'draft') {
+      message.success('草稿已保存到服务器')
+    } else {
+      clearDraft()
+      message.success('文章发布成功！')
+      router.push(`/article/${articleId}`)
+    }
+
     saveDraftToLocal()
   } catch (err: any) {
-    message.error(err.message || '保存草稿失败')
+    message.error(err.message || '操作失败')
   } finally {
     saving.value = false
   }
+}
+
+async function saveDraft() {
+  if (!form.title.trim()) {
+    message.warning('请至少输入标题')
+    return
+  }
+  await saveArticle('draft')
 }
 
 async function publish() {
@@ -209,39 +230,6 @@ async function publish() {
     message.warning('请填写必填项')
     return
   }
-
-  saving.value = true
-  try {
-    if (isEdit.value && editId.value) {
-      await updateArticle(editId.value, {
-        title: form.title,
-        category: form.category,
-        content: form.content,
-        status: 'published',
-      })
-      if (selectedTagIds.value.length > 0) {
-        await setArticleTags(editId.value, selectedTagIds.value)
-      }
-      message.success('文章已更新')
-      router.push(`/article/${editId.value}`)
-    } else {
-      const article = await createArticle({
-        title: form.title,
-        category: form.category,
-        content: form.content,
-        status: 'published',
-      })
-      if (selectedTagIds.value.length > 0) {
-        await setArticleTags(article.id, selectedTagIds.value)
-      }
-      clearDraft()
-      message.success('文章发布成功！')
-      router.push(`/article/${article.id}`)
-    }
-  } catch (err: any) {
-    message.error(err.message || '发布失败，请稍后重试')
-  } finally {
-    saving.value = false
-  }
+  await saveArticle('published')
 }
 </script>

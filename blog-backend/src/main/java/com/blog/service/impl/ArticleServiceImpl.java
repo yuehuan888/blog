@@ -8,9 +8,11 @@ import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
 import com.blog.dto.ArticleQueryDTO;
 import com.blog.entity.Article;
 import com.blog.entity.ArticleHistory;
-import com.blog.mapper.ArticleHistoryMapper;
-import com.blog.mapper.ArticleMapper;
+import com.blog.entity.ArticleRead;
+import com.blog.entity.ArticleTag;
+import com.blog.mapper.*;
 import com.blog.service.ArticleService;
+import com.blog.util.AuthContext;
 import java.util.Objects;
 import com.fasterxml.jackson.databind.JavaType;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -41,6 +43,27 @@ public class ArticleServiceImpl extends ServiceImpl<ArticleMapper, Article> impl
 
     @Autowired
     private ArticleHistoryMapper articleHistoryMapper;
+
+    @Autowired
+    private ArticleTagMapper articleTagMapper;
+
+    @Autowired
+    private ArticleLikeMapper articleLikeMapper;
+
+    @Autowired
+    private ArticleFavoriteMapper articleFavoriteMapper;
+
+    @Autowired
+    private ArticleReadMapper articleReadMapper;
+
+    @Autowired
+    private CommentMapper commentMapper;
+
+    @Autowired
+    private CommentLikeMapper commentLikeMapper;
+
+    @Autowired
+    private TagMapper tagMapper;
 
     @Autowired(required = false)
     private StringRedisTemplate redisTemplate;
@@ -102,11 +125,67 @@ public class ArticleServiceImpl extends ServiceImpl<ArticleMapper, Article> impl
     @Override
     @Transactional
     public boolean removeById(Serializable id) {
-        Article article = getById(id);
-        boolean result = super.removeById(id);
-        deleteCache(CACHE_ARTICLE + id);
+        Long articleId = (Long) id;
+
+        // Permission: article author or admin
+        Article article = super.getById(articleId);
+        if (article == null) {
+            throw new RuntimeException("Article not found: " + articleId);
+        }
+        Long currentUserId = AuthContext.getUserId();
+        if (currentUserId == null) {
+            throw new RuntimeException("Authentication required");
+        }
+        if (!AuthContext.isAdmin() && !article.getAuthorId().equals(currentUserId)) {
+            throw new RuntimeException("Only the article author or admin can delete");
+        }
+
+        // 1. Clean up tag associations and decrement counts
+        List<ArticleTag> articleTags = articleTagMapper.selectByArticleId(articleId);
+        for (ArticleTag at : articleTags) {
+            tagMapper.decrementArticleCount(at.getTagId());
+        }
+        articleTagMapper.deleteByArticleId(articleId);
+
+        // 2. Clean up likes
+        articleLikeMapper.deleteByArticleId(articleId);
+
+        // 3. Clean up favorites
+        articleFavoriteMapper.deleteByArticleId(articleId);
+
+        // 4. Clean up read records
+        articleReadMapper.delete(new LambdaQueryWrapper<ArticleRead>()
+                .eq(ArticleRead::getArticleId, articleId));
+
+        // 5. Clean up comments and their likes
+        List<Long> commentIds = commentMapper.selectIdsByArticleId(articleId);
+        if (!commentIds.isEmpty()) {
+            commentLikeMapper.deleteByCommentIds(commentIds);
+            commentMapper.deleteByArticleId(articleId);
+        }
+
+        // 6. Clean up version history
+        articleHistoryMapper.delete(new LambdaQueryWrapper<ArticleHistory>()
+                .eq(ArticleHistory::getArticleId, articleId));
+
+        // 7. Delete the article itself
+        boolean result = super.removeById(articleId);
+
+        // 8. Clear all Redis caches
+        deleteCache(CACHE_ARTICLE + articleId);
         deleteCache(CACHE_CATEGORY_STATS);
         deleteTagCloudCache();
+        if (redisTemplate != null) {
+            try {
+                redisTemplate.delete("article:like:" + articleId);
+                redisTemplate.delete("article:favorite:" + articleId);
+                redisTemplate.opsForZSet().remove("article:hot:7", articleId.toString());
+                redisTemplate.opsForZSet().remove("article:hot:30", articleId.toString());
+            } catch (Exception e) {
+                log.warn("Failed to clear Redis keys for article: {}", articleId, e);
+            }
+        }
+
         sendEvent("deleted", article);
         return result;
     }

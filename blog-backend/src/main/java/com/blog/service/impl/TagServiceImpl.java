@@ -7,6 +7,7 @@ import com.blog.service.TagService;
 import com.blog.util.AuthContext;
 import com.fasterxml.jackson.databind.JavaType;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import jakarta.annotation.PostConstruct;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -35,6 +36,22 @@ public class TagServiceImpl implements TagService {
 
     @Autowired(required = false)
     private StringRedisTemplate redisTemplate;
+
+    /**
+     * Clear stale tag cloud caches on startup so the filter (articleCount > 0)
+     * takes effect immediately.
+     */
+    @PostConstruct
+    public void clearCloudCachesOnStartup() {
+        if (redisTemplate == null) return;
+        try {
+            redisTemplate.delete(CACHE_TAG_CLOUD + "count");
+            redisTemplate.delete(CACHE_TAG_CLOUD + "hot");
+            log.info("Cleared tag cloud caches on startup");
+        } catch (Exception e) {
+            log.warn("Failed to clear tag cloud caches on startup", e);
+        }
+    }
 
     @Override
     @Transactional
@@ -99,15 +116,6 @@ public class TagServiceImpl implements TagService {
 
     @Override
     public List<TagCloudItem> getCloud(String sort) {
-        String cacheKey = CACHE_TAG_CLOUD + sort;
-        JavaType listType = objectMapper.getTypeFactory()
-                .constructCollectionType(List.class, TagCloudItem.class);
-        List<TagCloudItem> cached = getCache(cacheKey, listType);
-        if (cached != null) {
-            log.debug("Cache hit: {}", cacheKey);
-            return cached;
-        }
-
         List<Tag> tags;
         if ("hot".equals(sort)) {
             tags = tagMapper.selectWithHotScore();
@@ -115,16 +123,13 @@ public class TagServiceImpl implements TagService {
             tags = tagMapper.selectByArticleCountDesc();
         }
 
-        List<TagCloudItem> result = tags.stream()
+        return tags.stream()
                 .map(t -> new TagCloudItem(
                         t.getId(),
                         t.getName(),
                         t.getArticleCount() != null ? t.getArticleCount() : 0,
                         t.getHotScore() != null ? t.getHotScore() : 0))
                 .toList();
-
-        setCache(cacheKey, result, CLOUD_CACHE_TTL);
-        return result;
     }
 
     // ==================== 管理员校验 ====================

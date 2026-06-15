@@ -30,8 +30,19 @@
         返回
       </NButton>
 
-      <!-- Title -->
-      <h1 class="text-2xl md:text-3xl font-bold mb-2">{{ article.title }}</h1>
+      <!-- Title + Delete -->
+      <div class="flex items-start justify-between gap-4 mb-2">
+        <h1 class="text-2xl md:text-3xl font-bold flex-1">{{ article.title }}</h1>
+        <NPopconfirm v-if="canDelete" @positive-click="handleDelete">
+          <template #trigger>
+            <NButton size="small" type="error" :loading="deleting">
+              <template #icon><NIcon size="16"><TrashOutline /></NIcon></template>
+              删除
+            </NButton>
+          </template>
+          确定删除此文章？所有评论、点赞数据将被一并删除。
+        </NPopconfirm>
+      </div>
 
       <!-- Meta -->
       <div class="flex items-center gap-4 text-sm text-text-secondary mb-6 pb-6 border-b border-gray-100">
@@ -69,21 +80,29 @@
 </template>
 
 <script setup lang="ts">
-import { NResult, NButton, NIcon } from 'naive-ui'
-import { ArrowBackOutline } from '@vicons/ionicons5'
-import { getArticleById, getArticleTags, getArticleStats } from '~/api/modules/article'
+import { NResult, NButton, NIcon, NPopconfirm, useMessage } from 'naive-ui'
+import { ArrowBackOutline, TrashOutline } from '@vicons/ionicons5'
+import { getArticleById, getArticleTags, getArticleStats, deleteArticle } from '~/api/modules/article'
+import { useAuthStore } from '~/stores/auth'
 import type { Article, Tag } from '~/types'
 
 const route = useRoute()
 const router = useRouter()
+const authStore = useAuthStore()
+const message = useMessage()
 
 const article = ref<Article | null>(null)
 const tags = ref<Tag[]>([])
 const articleStats = ref<Record<string, any>>({})
 const loading = ref(true)
+const deleting = ref(false)
 const error = ref<string | null>(null)
 
 const articleId = computed(() => Number(route.params.id))
+const canDelete = computed(() => {
+  if (!article.value) return false
+  return authStore.isAdmin || authStore.user?.userId === article.value.authorId
+})
 
 const renderedContent = computed(() => {
   if (!article.value?.content) return ''
@@ -102,6 +121,19 @@ function formatDate(dateStr: string): string {
   if (days === 1) return '昨天'
   if (days < 7) return `${days}天前`
   return d.toLocaleDateString('zh-CN')
+}
+
+async function handleDelete() {
+  deleting.value = true
+  try {
+    await deleteArticle(articleId.value)
+    message.success('文章已删除')
+    router.replace('/')
+  } catch (err: any) {
+    message.error(err.message || '删除失败')
+  } finally {
+    deleting.value = false
+  }
 }
 
 async function fetchArticle() {
