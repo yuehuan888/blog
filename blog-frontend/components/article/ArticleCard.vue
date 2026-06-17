@@ -18,18 +18,6 @@
         {{ article.title }}
       </h3>
 
-      <!-- Author Row -->
-      <div
-        v-if="author"
-        class="flex items-center gap-2 pt-2 border-t border-gray-50 cursor-pointer"
-        @click.stop="navigateTo(`/user/${article.authorId}`)"
-      >
-        <UserAvatar :username="author.nickname || author.username" :src="author.avatar" size="small" />
-        <span class="text-xs text-text-secondary hover:text-primary transition-colors truncate">
-          {{ author.nickname || author.username }}
-        </span>
-      </div>
-
       <!-- Tags -->
       <div v-if="tags.length > 0" class="flex gap-1 mb-2 flex-wrap">
         <NTag
@@ -43,6 +31,18 @@
         >
           {{ tag.name }}
         </NTag>
+      </div>
+
+      <!-- Author Row -->
+      <div
+        v-if="author"
+        class="flex items-center gap-2 mt-2 pt-2 border-t border-gray-100 cursor-pointer"
+        @click.stop="navigateTo(`/user/${article.authorId}`)"
+      >
+        <UserAvatar :username="author.nickname || author.username" :src="author.avatar" size="small" />
+        <span class="text-xs text-text-secondary hover:text-primary transition-colors truncate">
+          {{ author.nickname || author.username }}
+        </span>
       </div>
 
       <!-- Meta -->
