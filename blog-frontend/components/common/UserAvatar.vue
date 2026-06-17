@@ -1,12 +1,16 @@
 <template>
   <div
-    class="user-avatar flex items-center justify-center font-medium text-white select-none flex-shrink-0 overflow-hidden"
-    :class="[sizeClass, roundClass]"
     :style="avatarStyle"
+    class="flex items-center justify-center font-medium select-none flex-shrink-0 overflow-hidden rounded-full"
     :title="username || ''"
   >
-    <img v-if="realSrc" :src="realSrc" class="w-full h-full object-cover" alt="" />
-    <span v-else class="leading-none">{{ displayChar }}</span>
+    <img
+      v-if="realSrc"
+      :src="realSrc"
+      :style="{ width: px + 'px', height: px + 'px', objectFit: 'cover' }"
+      alt=""
+    />
+    <span v-else :style="{ fontSize: fontSize + 'px', lineHeight: '1' }">{{ displayChar }}</span>
   </div>
 </template>
 
@@ -23,14 +27,14 @@ const props = withDefaults(defineProps<{
 
 const config = useRuntimeConfig()
 
-const sizeMap: Record<string, { cls: string; font: string }> = {
-  small: { cls: 'w-7 h-7', font: 'text-xs' },
-  medium: { cls: 'w-9 h-9', font: 'text-sm' },
-  large: { cls: 'w-12 h-12', font: 'text-lg' },
+const sizeMap: Record<string, { px: number; fontSize: number }> = {
+  small: { px: 28, fontSize: 10 },
+  medium: { px: 36, fontSize: 13 },
+  large: { px: 48, fontSize: 16 },
 }
 
-const sizeClass = computed(() => sizeMap[props.size]?.cls || sizeMap.medium.cls)
-const fontClass = computed(() => sizeMap[props.size]?.font || sizeMap.medium.font)
+const px = computed(() => sizeMap[props.size]?.px ?? 36)
+const fontSize = computed(() => sizeMap[props.size]?.fontSize ?? 13)
 
 const realSrc = computed(() => {
   if (!props.src || props.src === 'null') return null
@@ -38,23 +42,16 @@ const realSrc = computed(() => {
   return (config.public.apiBase as string) + props.src
 })
 
-const roundClass = 'rounded-full'
-
 const displayChar = computed(() => {
   return props.username?.charAt(0)?.toUpperCase() || '?'
 })
 
+const isImage = computed(() => !!realSrc.value)
+
 const avatarStyle = computed(() => ({
-  backgroundColor: '#2D6A4F',
-  fontSize: undefined, // handled by Tailwind class
+  width: px.value + 'px',
+  height: px.value + 'px',
+  backgroundColor: isImage.value ? 'transparent' : '#2D6A4F',
+  color: '#fff',
 }))
 </script>
-
-<style scoped>
-.user-avatar span {
-  font-size: inherit;
-}
-.user-avatar.w-7 span { font-size: 10px; }
-.user-avatar.w-9 span { font-size: 13px; }
-.user-avatar.w-12 span { font-size: 16px; }
-</style>
