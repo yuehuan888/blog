@@ -103,6 +103,7 @@ async function fetchTags() {
 }
 
 async function fetchAuthor() {
+  if (!props.article.authorId) return // skip articles without author
   try {
     author.value = await getUserProfile(props.article.authorId)
   } catch {

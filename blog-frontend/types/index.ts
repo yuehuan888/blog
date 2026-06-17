@@ -10,7 +10,7 @@ export interface Article {
   favoriteCount: number
   readCount: number
   commentCount: number
-  authorId: number
+  authorId: number | null
   createdAt: string
   updatedAt: string
 }
