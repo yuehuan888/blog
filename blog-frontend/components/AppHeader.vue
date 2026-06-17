@@ -30,13 +30,13 @@
             写文章
           </NButton>
           <NDropdown trigger="click" :options="userMenuOptions" @select="handleUserMenu">
-            <NButton quaternary circle style="padding: 0; overflow: hidden;">
+            <span class="cursor-pointer inline-block">
               <UserAvatar
                 :username="authStore.user?.nickname || authStore.user?.username"
                 :src="authStore.user?.avatar"
                 size="small"
               />
-            </NButton>
+            </span>
           </NDropdown>
           <span class="hidden md:block text-sm text-text-secondary max-w-24 truncate">
             {{ authStore.user?.nickname || authStore.user?.username }}
