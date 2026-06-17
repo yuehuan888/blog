@@ -29,9 +29,14 @@
             </template>
             写文章
           </NButton>
-          <!-- Avatar (inline for reliability) -->
+          <!-- Avatar -->
           <div
-            class="w-7 h-7 rounded-full bg-primary flex items-center justify-center text-white text-xs font-medium flex-shrink-0 cursor-pointer"
+            :style="{
+              width: '28px', height: '28px', borderRadius: '50%',
+              background: '#2D6A4F', color: '#fff',
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              fontSize: '12px', fontWeight: '500', flexShrink: '0', cursor: 'pointer'
+            }"
             @click="navigateTo(`/user/${authStore.user!.userId}`)"
           >
             {{ (authStore.user?.nickname || authStore.user?.username || '?').charAt(0).toUpperCase() }}
