@@ -29,18 +29,23 @@
             </template>
             写文章
           </NButton>
-          <NDropdown trigger="click" :options="userMenuOptions" @select="handleUserMenu">
-            <span class="cursor-pointer inline-block">
-              <UserAvatar
-                :username="authStore.user?.nickname || authStore.user?.username"
-                :src="authStore.user?.avatar"
-                size="small"
-              />
-            </span>
-          </NDropdown>
+          <UserAvatar
+            :username="authStore.user?.nickname || authStore.user?.username"
+            :src="authStore.user?.avatar"
+            size="small"
+            class="cursor-pointer"
+            @click="navigateTo(`/user/${authStore.user!.userId}`)"
+          />
           <span class="hidden md:block text-sm text-text-secondary max-w-24 truncate">
             {{ authStore.user?.nickname || authStore.user?.username }}
           </span>
+          <NDropdown trigger="click" :options="userMenuOptions" @select="handleUserMenu">
+            <NButton quaternary circle size="small">
+              <template #icon>
+                <NIcon size="16"><ChevronDownOutline /></NIcon>
+              </template>
+            </NButton>
+          </NDropdown>
         </template>
         <template v-else>
           <NButton text @click="navigateTo('/user/login')">登录</NButton>
@@ -53,7 +58,7 @@
 
 <script setup lang="ts">
 import { NButton, NDropdown, NIcon } from 'naive-ui'
-import { PencilOutline } from '@vicons/ionicons5'
+import { PencilOutline, ChevronDownOutline } from '@vicons/ionicons5'
 import { useAuthStore } from '~/stores/auth'
 
 const authStore = useAuthStore()
