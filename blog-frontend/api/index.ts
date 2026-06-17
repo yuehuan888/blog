@@ -16,7 +16,7 @@ export async function apiRequest<T>(
 
   const headers: Record<string, string> = {}
 
-  if (options.body && typeof options.body === 'object') {
+  if (options.body && typeof options.body === 'object' && !(options.body instanceof FormData)) {
     headers['Content-Type'] = 'application/json'
   }
 

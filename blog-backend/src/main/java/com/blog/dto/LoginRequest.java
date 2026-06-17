@@ -9,5 +9,7 @@ public class LoginRequest {
 
     private String nickname;
 
+    private String avatar;
+
     private String password;
 }

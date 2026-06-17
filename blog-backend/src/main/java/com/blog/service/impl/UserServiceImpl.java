@@ -32,13 +32,14 @@ public class UserServiceImpl implements UserService {
 
     @Override
     @Transactional
-    public LoginResponse register(String username, String password, String nickname) {
+    public LoginResponse register(String username, String password, String nickname, String avatar) {
         if (userMapper.selectByUsername(username) != null) {
             throw new RuntimeException("Username already exists: " + username);
         }
         User user = new User();
         user.setUsername(username);
         user.setNickname(nickname != null && !nickname.isBlank() ? nickname : username);
+        user.setAvatar(avatar);
         user.setPassword(password);
         user.setRole("user");
         userMapper.insert(user);
