@@ -31,7 +31,7 @@
       </NButton>
 
       <!-- Author Info -->
-      <div class="flex items-center gap-3 mb-4 p-3 bg-gray-50 rounded-card">
+      <div v-if="article.authorId" class="flex items-center gap-3 mb-4 p-3 bg-gray-50 rounded-card">
         <div class="cursor-pointer flex items-center gap-3 flex-1" @click="navigateTo(`/user/${article.authorId}`)">
           <UserAvatar
             :username="authorProfile?.nickname || authorProfile?.username || '?'"
@@ -166,7 +166,8 @@ async function handleFollow() {
   }
   followLoading.value = true
   try {
-    const result = await toggleFollow(article.value!.authorId)
+    if (!article.value?.authorId) return
+    const result = await toggleFollow(article.value.authorId)
     following.value = result.liked
   } catch (err: any) {
     message.error(err.message || '操作失败')
@@ -201,14 +202,16 @@ async function fetchArticle() {
     tags.value = tagsData
     articleStats.value = statsData
 
-    // Fetch author profile
-    try {
-      authorProfile.value = await getUserProfile(articleData.authorId)
-      following.value = authorProfile.value.followed
-    } catch {
-      // Non-critical
+    // Fetch author profile (skip if article has no author)
+    if (articleData.authorId) {
+      try {
+        authorProfile.value = await getUserProfile(articleData.authorId)
+        following.value = authorProfile.value.followed
+      } catch {
+        // Non-critical
+      }
     }
-  } catch (err: any) {
+    } catch (err: any) {
     error.value = err.message || '加载文章失败'
   } finally {
     loading.value = false
