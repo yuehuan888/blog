@@ -29,13 +29,13 @@
             </template>
             写文章
           </NButton>
-          <UserAvatar
-            :username="authStore.user?.nickname || authStore.user?.username"
-            :src="authStore.user?.avatar"
-            size="small"
-            class="cursor-pointer"
+          <!-- Avatar (inline for reliability) -->
+          <div
+            class="w-7 h-7 rounded-full bg-primary flex items-center justify-center text-white text-xs font-medium flex-shrink-0 cursor-pointer"
             @click="navigateTo(`/user/${authStore.user!.userId}`)"
-          />
+          >
+            {{ (authStore.user?.nickname || authStore.user?.username || '?').charAt(0).toUpperCase() }}
+          </div>
           <span class="hidden md:block text-sm text-text-secondary max-w-24 truncate">
             {{ authStore.user?.nickname || authStore.user?.username }}
           </span>
