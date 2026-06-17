@@ -21,6 +21,8 @@ const props = withDefaults(defineProps<{
   size: 'medium',
 })
 
+const config = useRuntimeConfig()
+
 const sizeMap: Record<string, { cls: string; font: string }> = {
   small: { cls: 'w-7 h-7', font: 'text-xs' },
   medium: { cls: 'w-9 h-9', font: 'text-sm' },
@@ -32,7 +34,8 @@ const fontClass = computed(() => sizeMap[props.size]?.font || sizeMap.medium.fon
 
 const realSrc = computed(() => {
   if (!props.src || props.src === 'null') return null
-  return props.src
+  if (props.src.startsWith('http')) return props.src
+  return (config.public.apiBase as string) + props.src
 })
 
 const roundClass = 'rounded-full'

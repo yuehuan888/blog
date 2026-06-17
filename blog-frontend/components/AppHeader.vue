@@ -31,15 +31,17 @@
           </NButton>
           <!-- Avatar -->
           <div
+            class="flex-shrink-0 cursor-pointer overflow-hidden"
             :style="{
               width: '28px', height: '28px', borderRadius: '50%',
-              background: '#2D6A4F', color: '#fff',
+              background: avatarUrl ? 'transparent' : '#2D6A4F', color: '#fff',
               display: 'flex', alignItems: 'center', justifyContent: 'center',
-              fontSize: '12px', fontWeight: '500', flexShrink: '0', cursor: 'pointer'
+              fontSize: '12px', fontWeight: '500',
             }"
             @click="navigateTo(`/user/${authStore.user!.userId}`)"
           >
-            {{ (authStore.user?.nickname || authStore.user?.username || '?').charAt(0).toUpperCase() }}
+            <img v-if="avatarUrl" :src="avatarUrl" class="w-full h-full object-cover" />
+            <span v-else>{{ (authStore.user?.nickname || authStore.user?.username || '?').charAt(0).toUpperCase() }}</span>
           </div>
           <span class="hidden md:block text-sm text-text-secondary max-w-24 truncate">
             {{ authStore.user?.nickname || authStore.user?.username }}
@@ -67,6 +69,14 @@ import { PencilOutline, ChevronDownOutline } from '@vicons/ionicons5'
 import { useAuthStore } from '~/stores/auth'
 
 const authStore = useAuthStore()
+const config = useRuntimeConfig()
+
+const avatarUrl = computed(() => {
+  const avatar = authStore.user?.avatar
+  if (!avatar) return null
+  if (avatar.startsWith('http')) return avatar
+  return (config.public.apiBase as string) + avatar
+})
 
 const userMenuOptions = computed(() => {
   const options: any[] = [
