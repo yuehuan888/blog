@@ -30,12 +30,17 @@
             写文章
           </NButton>
           <NDropdown trigger="click" :options="userMenuOptions" @select="handleUserMenu">
-            <NButton quaternary circle>
-              <template #icon>
-                <NIcon size="20"><PersonCircleOutline /></NIcon>
-              </template>
+            <NButton quaternary circle style="padding: 0; overflow: hidden;">
+              <UserAvatar
+                :username="authStore.user?.nickname || authStore.user?.username"
+                :src="authStore.user?.avatar"
+                size="small"
+              />
             </NButton>
           </NDropdown>
+          <span class="hidden md:block text-sm text-text-secondary max-w-24 truncate">
+            {{ authStore.user?.nickname || authStore.user?.username }}
+          </span>
         </template>
         <template v-else>
           <NButton text @click="navigateTo('/user/login')">登录</NButton>
@@ -48,7 +53,7 @@
 
 <script setup lang="ts">
 import { NButton, NDropdown, NIcon } from 'naive-ui'
-import { PencilOutline, PersonCircleOutline } from '@vicons/ionicons5'
+import { PencilOutline } from '@vicons/ionicons5'
 import { useAuthStore } from '~/stores/auth'
 
 const authStore = useAuthStore()

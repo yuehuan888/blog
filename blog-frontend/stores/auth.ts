@@ -5,6 +5,8 @@ import type { LoginRequest } from '~/types'
 interface AuthUser {
   userId: number
   username: string
+  nickname: string
+  avatar: string
   role: string
 }
 
@@ -53,6 +55,8 @@ export const useAuthStore = defineStore('auth', () => {
     setAuth(res.token, {
       userId: res.userId,
       username: res.username,
+      nickname: res.nickname,
+      avatar: res.avatar,
       role: res.role,
     })
     return res
@@ -63,6 +67,8 @@ export const useAuthStore = defineStore('auth', () => {
     setAuth(res.token, {
       userId: res.userId,
       username: res.username,
+      nickname: res.nickname,
+      avatar: res.avatar,
       role: res.role,
     })
     return res

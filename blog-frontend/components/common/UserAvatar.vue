@@ -1,6 +1,6 @@
 <template>
-  <NAvatar :size="avatarSize" round :style="avatarStyle">
-    {{ username?.charAt(0)?.toUpperCase() || '?' }}
+  <NAvatar :size="avatarSize" round :style="avatarStyle" :src="src || undefined">
+    {{ displayChar }}
   </NAvatar>
 </template>
 
@@ -9,9 +9,11 @@ import { NAvatar } from 'naive-ui'
 
 const props = withDefaults(defineProps<{
   username?: string
+  src?: string
   size?: 'small' | 'medium' | 'large'
 }>(), {
   username: '',
+  src: '',
   size: 'medium',
 })
 
@@ -23,8 +25,12 @@ const sizeMap: Record<string, number> = {
 
 const avatarSize = computed(() => sizeMap[props.size])
 
+const displayChar = computed(() => {
+  return props.username?.charAt(0)?.toUpperCase() || '?'
+})
+
 const avatarStyle = computed(() => ({
-  backgroundColor: '#2D6A4F',
+  backgroundColor: props.src ? 'transparent' : '#2D6A4F',
   color: '#fff',
 }))
 </script>

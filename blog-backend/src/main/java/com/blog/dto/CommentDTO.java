@@ -24,4 +24,6 @@ public class CommentDTO {
     private List<CommentDTO> replies;
     private int replyCount;
     private boolean liked;
+    private String userNickname;
+    private String userAvatar;
 }

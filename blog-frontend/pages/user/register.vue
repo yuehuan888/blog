@@ -5,6 +5,9 @@
         <NFormItem label="用户名" path="username">
           <NInput v-model:value="form.username" placeholder="请输入用户名" size="large" />
         </NFormItem>
+        <NFormItem label="昵称" path="nickname">
+          <NInput v-model:value="form.nickname" placeholder="给自己起个昵称（选填，默认用户名为昵称）" size="large" />
+        </NFormItem>
         <NFormItem label="密码" path="password">
           <NInput
             v-model:value="form.password"
@@ -59,6 +62,7 @@ const formRef = ref<FormInst | null>(null)
 const loading = ref(false)
 const form = reactive({
   username: '',
+  nickname: '',
   password: '',
   confirmPassword: '',
 })
@@ -98,6 +102,7 @@ async function handleRegister() {
     await authStore.register({
       username: form.username,
       password: form.password,
+      nickname: form.nickname || undefined,
     })
     message.success('注册成功！欢迎加入 GreenRead')
     router.push('/')

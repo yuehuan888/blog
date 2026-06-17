@@ -32,18 +32,19 @@ public class UserServiceImpl implements UserService {
 
     @Override
     @Transactional
-    public LoginResponse register(String username, String password) {
+    public LoginResponse register(String username, String password, String nickname) {
         if (userMapper.selectByUsername(username) != null) {
             throw new RuntimeException("Username already exists: " + username);
         }
         User user = new User();
         user.setUsername(username);
+        user.setNickname(nickname != null && !nickname.isBlank() ? nickname : username);
         user.setPassword(password);
         user.setRole("user");
         userMapper.insert(user);
 
         String token = jwtUtil.generateToken(user.getId(), user.getUsername(), user.getRole());
-        return new LoginResponse(token, user.getId(), user.getUsername(), user.getRole());
+        return new LoginResponse(token, user.getId(), user.getUsername(), user.getNickname(), user.getAvatar(), user.getRole());
     }
 
     @Override
@@ -54,7 +55,7 @@ public class UserServiceImpl implements UserService {
         }
 
         String token = jwtUtil.generateToken(user.getId(), user.getUsername(), user.getRole());
-        return new LoginResponse(token, user.getId(), user.getUsername(), user.getRole());
+        return new LoginResponse(token, user.getId(), user.getUsername(), user.getNickname(), user.getAvatar(), user.getRole());
     }
 
     @Override

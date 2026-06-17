@@ -6,9 +6,11 @@ import com.blog.dto.CommentDTO;
 import com.blog.dto.ToggleResult;
 import com.blog.entity.Comment;
 import com.blog.entity.CommentLike;
+import com.blog.entity.User;
 import com.blog.mapper.ArticleMapper;
 import com.blog.mapper.CommentLikeMapper;
 import com.blog.mapper.CommentMapper;
+import com.blog.mapper.UserMapper;
 import com.blog.service.CommentService;
 import com.blog.util.AuthContext;
 import org.slf4j.Logger;
@@ -20,7 +22,10 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
+import java.util.stream.Collectors;
 
 @Service
 public class CommentServiceImpl implements CommentService {
@@ -37,6 +42,9 @@ public class CommentServiceImpl implements CommentService {
 
     @Autowired
     private ArticleMapper articleMapper;
+
+    @Autowired
+    private UserMapper userMapper;
 
     @Autowired(required = false)
     private StringRedisTemplate redisTemplate;
@@ -80,14 +88,26 @@ public class CommentServiceImpl implements CommentService {
         int fromIndex = (page - 1) * size;
         int toIndex = Math.min(fromIndex + size, total);
 
+        // Collect all userIds for batch lookup
+        List<Long> userIds = new ArrayList<>();
+        List<Comment> pageComments = fromIndex < total ? topLevel.subList(fromIndex, toIndex) : List.of();
+        for (Comment c : pageComments) {
+            userIds.add(c.getUserId());
+            List<Comment> replies = commentMapper.selectLatestReplies(c.getId(), PRELOAD_REPLIES);
+            for (Comment r : replies) {
+                userIds.add(r.getUserId());
+            }
+        }
+        Map<Long, User> userMap = batchLoadUsers(userIds);
+
         List<CommentDTO> records = new ArrayList<>();
         if (fromIndex < total) {
-            for (Comment c : topLevel.subList(fromIndex, toIndex)) {
-                CommentDTO dto = toDTO(c);
+            for (Comment c : pageComments) {
+                CommentDTO dto = toDTO(c, userMap);
                 List<Comment> latestReplies = commentMapper.selectLatestReplies(c.getId(), PRELOAD_REPLIES);
                 List<CommentDTO> replyDTOs = new ArrayList<>();
                 for (Comment r : latestReplies) {
-                    replyDTOs.add(toDTO(r));
+                    replyDTOs.add(toDTO(r, userMap));
                 }
                 dto.setReplies(replyDTOs);
                 dto.setReplyCount(commentMapper.countReplies(c.getId()));
@@ -107,10 +127,14 @@ public class CommentServiceImpl implements CommentService {
         int fromIndex = (page - 1) * size;
         int toIndex = Math.min(fromIndex + size, total);
 
+        // Collect userIds for batch lookup
+        List<Long> userIds = replies.stream().map(Comment::getUserId).collect(Collectors.toList());
+        Map<Long, User> userMap = batchLoadUsers(userIds);
+
         List<CommentDTO> records = new ArrayList<>();
         if (fromIndex < total) {
             for (Comment c : replies.subList(fromIndex, toIndex)) {
-                records.add(toDTO(c));
+                records.add(toDTO(c, userMap));
             }
         }
 
@@ -202,7 +226,7 @@ public class CommentServiceImpl implements CommentService {
         }
     }
 
-    private CommentDTO toDTO(Comment c) {
+    private CommentDTO toDTO(Comment c, Map<Long, User> userMap) {
         CommentDTO dto = new CommentDTO();
         dto.setId(c.getId());
         dto.setArticleId(c.getArticleId());
@@ -216,6 +240,15 @@ public class CommentServiceImpl implements CommentService {
         dto.setReplies(List.of());
         dto.setReplyCount(0);
 
+        // Populate user info
+        User user = userMap.get(c.getUserId());
+        if (user != null) {
+            dto.setUserNickname(user.getNickname() != null ? user.getNickname() : user.getUsername());
+            dto.setUserAvatar(user.getAvatar());
+        } else {
+            dto.setUserNickname("用户" + c.getUserId());
+        }
+
         // Check if current user liked this comment
         Long currentUserId = AuthContext.getUserId();
         if (currentUserId != null) {
@@ -223,6 +256,17 @@ public class CommentServiceImpl implements CommentService {
         }
 
         return dto;
+    }
+
+    private Map<Long, User> batchLoadUsers(List<Long> userIds) {
+        if (userIds.isEmpty()) return new HashMap<>();
+        List<Long> distinctIds = userIds.stream().distinct().collect(Collectors.toList());
+        List<User> users = userMapper.selectBatchIds(distinctIds);
+        Map<Long, User> map = new HashMap<>();
+        for (User u : users) {
+            if (u != null) map.put(u.getId(), u);
+        }
+        return map;
     }
 
     private void invalidateCommentCache(Long articleId) {

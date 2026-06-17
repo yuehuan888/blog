@@ -18,6 +18,8 @@ export interface Article {
 export interface User {
   id: number
   username: string
+  nickname: string
+  avatar: string
   password?: string
   role: 'admin' | 'user'
   createdAt: string
@@ -34,6 +36,8 @@ export interface Comment {
   status: 'visible' | 'hidden' | 'deleted'
   createdAt: string
   liked: boolean
+  userNickname: string
+  userAvatar: string
 }
 
 export interface CommentDTO extends Comment {
@@ -76,12 +80,15 @@ export interface LoginResponse {
   token: string
   userId: number
   username: string
+  nickname: string
+  avatar: string
   role: string
 }
 
 export interface LoginRequest {
   username: string
   password: string
+  nickname?: string
 }
 
 export interface ArticleQueryParams {
@@ -124,6 +131,18 @@ export interface CategoryStat {
 }
 
 // ========== Comment Form ==========
+
+export interface UserProfile extends User {
+  followerCount: number
+  followingCount: number
+  articleCount: number
+  followed: boolean
+}
+
+export interface FollowToggleResult {
+  liked: boolean
+  count: number
+}
 
 export interface CommentForm {
   articleId: number

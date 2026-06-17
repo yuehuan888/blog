@@ -10,21 +10,15 @@ import lombok.Data;
 import java.time.LocalDateTime;
 
 @Data
-@TableName("user")
-public class User {
+@TableName("user_follow")
+public class Follow {
 
     @TableId(type = IdType.AUTO)
     private Long id;
 
-    private String username;
+    private Long followerId;
 
-    private String nickname;
-
-    private String avatar;
-
-    private String password;
-
-    private String role;
+    private Long followingId;
 
     @TableField(fill = FieldFill.INSERT)
     private LocalDateTime createdAt;

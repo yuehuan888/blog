@@ -3,16 +3,41 @@
     <!-- Profile Header -->
     <div class="bg-white rounded-card p-6 mb-6 shadow-sm">
       <div class="flex items-center gap-4">
-        <UserAvatar :username="profileUsername" size="large" />
-        <div>
-          <h1 class="text-xl font-bold">{{ profileUsername || '用户' + profileUserId }}</h1>
-          <p class="text-sm text-text-secondary">{{ publishedCount }} 篇发布 · {{ draftArticles.length }} 篇草稿</p>
+        <UserAvatar
+          :username="profileData?.nickname || profileData?.username || '?'"
+          :src="profileData?.avatar"
+          size="large"
+        />
+        <div class="flex-1">
+          <h1 class="text-xl font-bold">
+            {{ profileData?.nickname || profileData?.username || '用户' + profileUserId }}
+          </h1>
+          <div class="flex items-center gap-4 text-sm text-text-secondary mt-1">
+            <span>{{ profileData?.articleCount || publishedCount }} 篇发布</span>
+            <span>{{ profileData?.followerCount || 0 }} 粉丝</span>
+            <span>{{ profileData?.followingCount || 0 }} 关注</span>
+          </div>
+          <p v-if="isOwnProfile && draftArticles.length" class="text-xs text-text-secondary mt-1">
+            {{ draftArticles.length }} 篇草稿
+          </p>
         </div>
-        <div v-if="isOwnProfile" class="ml-auto">
+        <div v-if="isOwnProfile" class="ml-auto flex gap-2">
+          <NButton size="small" @click="isOwnProfile ? null : null">
+            编辑资料
+          </NButton>
           <NButton type="primary" size="small" @click="navigateTo('/article/write')">
             写文章
           </NButton>
         </div>
+        <NButton
+          v-else-if="authStore.isLoggedIn"
+          :type="isFollowing ? 'default' : 'primary'"
+          size="small"
+          :loading="followLoading"
+          @click="handleFollow"
+        >
+          {{ isFollowing ? '已关注' : '+ 关注' }}
+        </NButton>
       </div>
     </div>
 
@@ -100,18 +125,21 @@
 <script setup lang="ts">
 import { NCard, NButton, NPagination, NPopconfirm, useMessage } from 'naive-ui'
 import { getArticles, deleteArticle } from '~/api/modules/article'
+import { getUserProfile, toggleFollow } from '~/api/modules/user'
 import { useAuthStore } from '~/stores/auth'
-import type { Article } from '~/types'
+import type { Article, UserProfile } from '~/types'
 
 const route = useRoute()
 const authStore = useAuthStore()
 const message = useMessage()
 
 const profileUserId = computed(() => Number(route.params.id))
-const profileUsername = ref('')
+const profileData = ref<UserProfile | null>(null)
 const publishedArticles = ref<Article[]>([])
 const draftArticles = ref<Article[]>([])
 const publishedCount = ref(0)
+const isFollowing = ref(false)
+const followLoading = ref(false)
 const loading = ref(true)
 const currentPage = ref(1)
 const totalPages = ref(1)
@@ -128,6 +156,33 @@ function formatDate(dateStr: string): string {
   if (days === 1) return '昨天'
   if (days < 7) return `${days}天前`
   return d.toLocaleDateString('zh-CN')
+}
+
+async function fetchProfile() {
+  try {
+    profileData.value = await getUserProfile(profileUserId.value)
+    isFollowing.value = profileData.value.followed
+  } catch {
+    // Use fallback: display userId only
+  }
+}
+
+async function handleFollow() {
+  if (!authStore.isLoggedIn) {
+    navigateTo('/user/login')
+    return
+  }
+  followLoading.value = true
+  try {
+    const result = await toggleFollow(profileUserId.value)
+    isFollowing.value = result.liked
+    // Refresh profile to get updated follower count
+    await fetchProfile()
+  } catch (err: any) {
+    message.error(err.message || '操作失败')
+  } finally {
+    followLoading.value = false
+  }
 }
 
 async function fetchArticles() {
@@ -169,6 +224,12 @@ async function handleDelete(articleId: number) {
   }
 }
 
-onMounted(fetchArticles)
-watch(profileUserId, fetchArticles)
+onMounted(() => {
+  fetchProfile()
+  fetchArticles()
+})
+watch(profileUserId, () => {
+  fetchProfile()
+  fetchArticles()
+})
 </script>

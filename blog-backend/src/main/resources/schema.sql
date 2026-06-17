@@ -93,8 +93,20 @@ CREATE TABLE IF NOT EXISTS comment_like (
 CREATE TABLE IF NOT EXISTS user (
     id          BIGINT AUTO_INCREMENT PRIMARY KEY,
     username    VARCHAR(50)  NOT NULL,
+    nickname    VARCHAR(50),
+    avatar      VARCHAR(500),
     password    VARCHAR(255) NOT NULL,
     role        VARCHAR(20)  NOT NULL DEFAULT 'user',
     created_at  DATETIME     NOT NULL,
     UNIQUE KEY uk_username (username)
+);
+
+CREATE TABLE IF NOT EXISTS user_follow (
+    id           BIGINT AUTO_INCREMENT PRIMARY KEY,
+    follower_id  BIGINT NOT NULL,
+    following_id BIGINT NOT NULL,
+    created_at   DATETIME NOT NULL,
+    UNIQUE KEY uk_follower_following (follower_id, following_id),
+    INDEX idx_follower (follower_id),
+    INDEX idx_following (following_id)
 );

@@ -1,11 +1,20 @@
 <template>
   <div class="py-3">
     <div class="flex gap-3">
-      <UserAvatar :username="comment.userId?.toString() || '?'" size="small" />
+      <UserAvatar
+        :username="comment.userNickname || '用户' + comment.userId"
+        :src="comment.userAvatar"
+        size="small"
+      />
       <div class="flex-1 min-w-0">
         <!-- Header -->
         <div class="flex items-center gap-2 mb-1">
-          <span class="text-sm font-medium">用户{{ comment.userId }}</span>
+          <span
+            class="text-sm font-medium cursor-pointer hover:text-primary transition-colors"
+            @click="navigateTo(`/user/${comment.userId}`)"
+          >
+            {{ comment.userNickname || '用户' + comment.userId }}
+          </span>
           <span class="text-xs text-text-secondary">{{ formatDate(comment.createdAt) }}</span>
           <NTag v-if="comment.status === 'deleted'" size="tiny" type="error">已删除</NTag>
           <NTag v-if="comment.status === 'hidden'" size="tiny" type="warning">已隐藏</NTag>

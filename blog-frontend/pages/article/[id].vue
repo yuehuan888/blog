@@ -30,6 +30,34 @@
         返回
       </NButton>
 
+      <!-- Author Info -->
+      <div class="flex items-center gap-3 mb-4 p-3 bg-gray-50 rounded-card">
+        <div class="cursor-pointer flex items-center gap-3 flex-1" @click="navigateTo(`/user/${article.authorId}`)">
+          <UserAvatar
+            :username="authorProfile?.nickname || authorProfile?.username || '?'"
+            :src="authorProfile?.avatar"
+            size="medium"
+          />
+          <div>
+            <div class="text-sm font-medium hover:text-primary transition-colors">
+              {{ authorProfile?.nickname || authorProfile?.username || '用户' + article.authorId }}
+            </div>
+            <div class="text-xs text-text-secondary">
+              {{ authorProfile?.followerCount || 0 }} 粉丝 · {{ authorProfile?.articleCount || 0 }} 篇
+            </div>
+          </div>
+        </div>
+        <NButton
+          v-if="!isOwnArticle"
+          :type="following ? 'default' : 'primary'"
+          size="small"
+          :loading="followLoading"
+          @click="handleFollow"
+        >
+          {{ following ? '已关注' : '+ 关注' }}
+        </NButton>
+      </div>
+
       <!-- Title + Delete -->
       <div class="flex items-start justify-between gap-4 mb-2">
         <h1 class="text-2xl md:text-3xl font-bold flex-1">{{ article.title }}</h1>
@@ -83,8 +111,9 @@
 import { NResult, NButton, NIcon, NPopconfirm, useMessage } from 'naive-ui'
 import { ArrowBackOutline, TrashOutline } from '@vicons/ionicons5'
 import { getArticleById, getArticleTags, getArticleStats, deleteArticle } from '~/api/modules/article'
+import { getUserProfile, toggleFollow } from '~/api/modules/user'
 import { useAuthStore } from '~/stores/auth'
-import type { Article, Tag } from '~/types'
+import type { Article, Tag, UserProfile } from '~/types'
 
 const route = useRoute()
 const router = useRouter()
@@ -94,6 +123,9 @@ const message = useMessage()
 const article = ref<Article | null>(null)
 const tags = ref<Tag[]>([])
 const articleStats = ref<Record<string, any>>({})
+const authorProfile = ref<UserProfile | null>(null)
+const following = ref(false)
+const followLoading = ref(false)
 const loading = ref(true)
 const deleting = ref(false)
 const error = ref<string | null>(null)
@@ -102,6 +134,10 @@ const articleId = computed(() => Number(route.params.id))
 const canDelete = computed(() => {
   if (!article.value) return false
   return authStore.isAdmin || authStore.user?.userId === article.value.authorId
+})
+
+const isOwnArticle = computed(() => {
+  return authStore.user?.userId === article.value?.authorId
 })
 
 const renderedContent = computed(() => {
@@ -121,6 +157,22 @@ function formatDate(dateStr: string): string {
   if (days === 1) return '昨天'
   if (days < 7) return `${days}天前`
   return d.toLocaleDateString('zh-CN')
+}
+
+async function handleFollow() {
+  if (!authStore.isLoggedIn) {
+    navigateTo('/user/login')
+    return
+  }
+  followLoading.value = true
+  try {
+    const result = await toggleFollow(article.value!.authorId)
+    following.value = result.liked
+  } catch (err: any) {
+    message.error(err.message || '操作失败')
+  } finally {
+    followLoading.value = false
+  }
 }
 
 async function handleDelete() {
@@ -148,6 +200,14 @@ async function fetchArticle() {
     article.value = articleData
     tags.value = tagsData
     articleStats.value = statsData
+
+    // Fetch author profile
+    try {
+      authorProfile.value = await getUserProfile(articleData.authorId)
+      following.value = authorProfile.value.followed
+    } catch {
+      // Non-critical
+    }
   } catch (err: any) {
     error.value = err.message || '加载文章失败'
   } finally {

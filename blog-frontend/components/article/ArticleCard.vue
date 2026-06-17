@@ -18,7 +18,19 @@
         {{ article.title }}
       </h3>
 
-      <!-- Article Tags (replaces standalone category tag) -->
+      <!-- Author Row -->
+      <div
+        v-if="author"
+        class="flex items-center gap-2 pt-2 border-t border-gray-50 cursor-pointer"
+        @click.stop="navigateTo(`/user/${article.authorId}`)"
+      >
+        <UserAvatar :username="author.nickname || author.username" :src="author.avatar" size="small" />
+        <span class="text-xs text-text-secondary hover:text-primary transition-colors truncate">
+          {{ author.nickname || author.username }}
+        </span>
+      </div>
+
+      <!-- Tags -->
       <div v-if="tags.length > 0" class="flex gap-1 mb-2 flex-wrap">
         <NTag
           v-for="tag in tags"
@@ -58,13 +70,15 @@
 import { NCard, NTag, NIcon } from 'naive-ui'
 import { EyeOutline, HeartOutline, ChatbubbleOutline } from '@vicons/ionicons5'
 import { getArticleTags } from '~/api/modules/article'
-import type { Article, Tag } from '~/types'
+import { getUserProfile } from '~/api/modules/user'
+import type { Article, Tag, UserProfile } from '~/types'
 
 const props = defineProps<{
   article: Article
 }>()
 
 const tags = ref<Tag[]>([])
+const author = ref<UserProfile | null>(null)
 
 const emojis = ['📝', '🌿', '📷', '🎨', '🍃', '✨', '📖', '🌸', '🌲', '🖋️']
 
@@ -79,7 +93,7 @@ function formatCount(n: number): string {
   return String(n)
 }
 
-// Fetch tags for this article
+// Fetch tags and author for this article
 async function fetchTags() {
   try {
     tags.value = await getArticleTags(props.article.id)
@@ -88,5 +102,16 @@ async function fetchTags() {
   }
 }
 
-onMounted(fetchTags)
+async function fetchAuthor() {
+  try {
+    author.value = await getUserProfile(props.article.authorId)
+  } catch {
+    // Non-critical
+  }
+}
+
+onMounted(() => {
+  fetchTags()
+  fetchAuthor()
+})
 </script>
