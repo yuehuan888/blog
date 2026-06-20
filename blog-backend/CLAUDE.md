@@ -33,12 +33,12 @@ mvn test -f pom.xml -Dspring.profiles.active=test
 
 ```
 com.blog
-├── entity/          # 10 个实体：Article, ArticleLike, ArticleFavorite, ArticleRead, Tag, ArticleTag, ArticleHistory, Comment, CommentLike, User
-├── mapper/          # 10 个 Mapper，继承 BaseMapper，自定义 SQL 用注解
-├── service/         # 9 个 Service 接口
-├── service/impl/    # 9 个 Service 实现，继承 ServiceImpl<Mapper, Entity>
-├── controller/      # ArticleController（15 个端点）+ TagController（4 个端点）+ CommentController（6 个端点）+ AuthController（3 个端点）
-├── dto/             # Result<T>, ArticleQueryDTO, ToggleResult, HotArticleDTO, TagCloudItem, CommentDTO, LoginRequest, LoginResponse
+├── entity/          # 12 个实体：Article, ArticleLike, ArticleFavorite, ArticleRead, Tag, ArticleTag, ArticleHistory, Comment, CommentLike, User, Follow
+├── mapper/          # 11 个 Mapper，继承 BaseMapper，自定义 SQL 用注解
+├── service/         # 10 个 Service 接口
+├── service/impl/    # 10 个 Service 实现，继承 ServiceImpl<Mapper, Entity>
+├── controller/      # ArticleController（15 个端点）+ TagController（4 个端点）+ CommentController（6 个端点）+ AuthController（3 个端点）+ UserController（4 个端点）+ UploadController（1 个端点）
+├── dto/             # Result<T>, ArticleQueryDTO, ToggleResult, HotArticleDTO, TagCloudItem, CommentDTO, LoginRequest, LoginResponse, UserDTO
 ├── config/          # MyBatisPlusConfig, RabbitMQConfig(条件), AsyncConfig, AuthInterceptor, WebMvcConfig
 ├── handler/         # MyMetaObjectHandler, GlobalExceptionHandler
 ├── event/           # ArticleEventListener(MQ), ArticleReadEventListener(@Async), ReadEvent
@@ -192,9 +192,14 @@ com.blog
 | POST | `/api/comments/{id}/like` | 评论点赞 toggle |
 | DELETE | `/api/comments/{id}` | 删除评论（本人软删/管理员硬删） |
 | PUT | `/api/comments/{id}/hide` | 管理员隐藏评论 |
-| POST | `/api/auth/register` | 注册 |
-| POST | `/api/auth/login` | 登录，返回 JWT |
+| POST | `/api/auth/register` | 注册（可选 nickname, avatar） |
+| POST | `/api/auth/login` | 登录，返回 JWT + nickname + avatar |
 | POST | `/api/auth/logout` | 登出，token 加入黑名单 |
+| GET | `/api/users/{id}` | 用户公开资料（含关注状态和计数） |
+| POST | `/api/users/{id}/follow` | 关注/取消关注 toggle |
+| GET | `/api/users/{id}/followers?page=&size=` | 粉丝列表 |
+| GET | `/api/users/{id}/following?page=&size=` | 关注列表 |
+| POST | `/api/upload/avatar` | 上传头像（免鉴权，max 2MB） |
 
 ## Redis Key 设计总览
 
@@ -262,9 +267,61 @@ com.blog
 - 创建文章时自动设置 `author_id` 为当前用户
 - 编辑/删除文章：作者本人或管理员可操作
 
+## 用户资料与关注系统（2026-06-18 新增）
+
+### 用户表扩展
+
+- `user` 表新增 `nickname VARCHAR(50)` 和 `avatar VARCHAR(500)` 字段
+- 注册接口 `/api/auth/register` 可选接收 `nickname` 和 `avatar` 参数
+- 登录接口 `/api/auth/login` 返回 `nickname` 和 `avatar`（连同 token、userId、username、role）
+
+### 关注系统
+
+**数据表：** `user_follow` — `follower_id` + `following_id`，UNIQUE(follower_id, following_id)，双向索引
+
+**端点（`UserController`）：**
+
+| 方法 | 路径 | 说明 |
+|------|------|------|
+| GET | `/api/users/{id}` | 用户公开信息（含 followerCount, followingCount, articleCount, followed） |
+| POST | `/api/users/{id}/follow` | 关注/取消关注 toggle，返回 `{liked, count}` |
+| GET | `/api/users/{id}/followers?page=&size=` | 粉丝列表（分页） |
+| GET | `/api/users/{id}/following?page=&size=` | 关注列表（分页） |
+
+**关注逻辑：**
+- Toggle 模式：已关注则删除记录 → `followed=false`，未关注则插入记录 → `followed=true`
+- `FollowServiceImpl.toggle()` 中先查是否已关注（`selectByFollowerAndFollowing`），再决定 INSERT 或 DELETE
+- 返回当前最新 followerCount（`countFollowers`）
+- `UserDTO.followed` 字段仅对已登录用户有意义：根据当前登录者是否关注了该用户来填充
+
+### 头像上传
+
+**端点：** `POST /api/upload/avatar`（免鉴权，已加入 `excludePathPatterns`）
+
+**校验规则：**
+- 文件非空
+- Content-Type 必须为 `image/*`
+- 大小不超过 2MB（配合 `spring.servlet.multipart.max-file-size`）
+
+**文件存储：**
+- 保存目录：`{app.upload.dir}/avatars/`（`app.upload.dir` 使用绝对路径 `D:/vibecoding1/uploads`，避免 Tomcat temp 目录问题）
+- 文件名：`avatar_{UUID前8位}{原扩展名}`
+- 返回：`{"url": "/uploads/avatars/avatar_xxx.png"}`
+
+**静态资源映射：**
+- `WebMvcConfig.addResourceHandlers()`：`/uploads/**` → `file:{uploadDir}/`
+- 前端通过 `http://localhost:8080` + 相对路径访问头像图片
+
+### 评论用户信息
+
+- `CommentDTO` 新增 `userNickname`、`userAvatar` 字段
+- `CommentServiceImpl.toDTO()` 接收 `Map<Long, User>`，根据 `comment.userId` 查找填充
+- `batchLoadUsers(List<Long> userIds)` 使用 `userMapper.selectBatchIds()` 批量查询，避免 N+1
+- 顶级评论和子回复均传递 userMap
+
 ## 数据库表
 
-10 张表，Schema 定义见 `src/main/resources/schema.sql`，应用启动时自动执行：
+10 张表 + 1 张关注表，Schema 定义见 `src/main/resources/schema.sql`，应用启动时自动执行：
 
 | 表 | 用途 | 关键字段/约束 |
 |----|------|-------------|
@@ -277,7 +334,8 @@ com.blog
 | `article_history` | 文章版本历史 | INDEX(article_id, version_no), change_type |
 | `comment` | 评论 | parent_id/reply_to 嵌套，status 状态控制，INDEX(article_id, parent_id) |
 | `comment_like` | 评论点赞 | UNIQUE(comment_id, user_id) |
-| `user` | 用户表 | UNIQUE(username), role 区分 admin/user |
+| `user` | 用户表 | UNIQUE(username), nickname, avatar, role 区分 admin/user |
+| `user_follow` | 用户关注 | UNIQUE(follower_id, following_id), INDEX(follower), INDEX(following) |
 
 ## 文章版本历史
 
