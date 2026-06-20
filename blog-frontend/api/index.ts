@@ -1,6 +1,55 @@
 import type { Result } from '~/types'
 import { useAuthStore } from '~/stores/auth'
 
+// 后端英文错误消息 → 中文翻译映射
+const ERROR_ZH: Record<string, string> = {
+  'Invalid username or password': '用户名或密码错误',
+  'Username already exists': '用户名已存在',
+  'Article not found': '文章不存在',
+  'Authentication required': '需要登录',
+  'Only the article author or admin can delete': '只有文章作者或管理员可以删除',
+  'Only the article author or admin can set tags': '只有文章作者或管理员可以设置标签',
+  'Admin access required': '需要管理员权限',
+  'Tag name already exists': '标签名已存在',
+  'Tag not found': '标签不存在',
+  'Comment not found': '评论不存在',
+  'Parent comment not found': '父评论不存在',
+  'Not authorized to delete this comment': '无权删除该评论',
+  'Comment contains sensitive word': '评论包含敏感词',
+  'Cannot follow yourself': '不能关注自己',
+  'User not found': '用户不存在',
+  'History not found': '版本历史不存在',
+  'History does not belong to this article': '版本历史不属于该文章',
+  'Redis not available': 'Redis 服务不可用',
+  'File is empty': '文件为空',
+  'Only image files are allowed': '只允许上传图片文件',
+  'File size must be less than 2MB': '文件大小不能超过 2MB',
+  'Failed to save file': '文件保存失败',
+  'Internal server error': '服务器内部错误',
+  'Missing or invalid Authorization header': '缺少或无效的认证信息',
+  'Token expired': '登录已过期，请重新登录',
+  'Token has been revoked': '登录已失效，请重新登录',
+  'Invalid token': '认证信息无效',
+}
+
+/** 将后端英文错误消息转为中文，带动态内容（如ID）的自动拼接 */
+function translateError(msg: string): string {
+  if (!msg) return ''
+  // 精确匹配
+  if (ERROR_ZH[msg]) return ERROR_ZH[msg]
+  // 带动态后缀的匹配（如 "Article not found: 123"）
+  for (const [en, zh] of Object.entries(ERROR_ZH)) {
+    if (msg.startsWith(en + ': ')) {
+      return zh + ': ' + msg.slice(en.length + 2)
+    }
+    if (msg.startsWith(en + ' ')) {
+      return zh + ' ' + msg.slice(en.length + 1)
+    }
+  }
+  // 无匹配则返回原文
+  return msg
+}
+
 interface RequestOptions {
   method?: 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE'
   body?: any
@@ -38,13 +87,14 @@ export async function apiRequest<T>(
         authStore.clearAuth()
         await navigateTo('/user/login')
       }
-      throw new Error(result.message || '请求失败')
+      throw new Error(translateError(result.message) || '请求失败')
     }
 
     return result.data as T
   } catch (err: any) {
     // ofetch FetchError: err.data = response body, err.statusCode = HTTP status
-    const apiMessage = err?.data?.message
+    const rawMessage: string = err?.data?.message || ''
+    const apiMessage = translateError(rawMessage)
     const statusCode = err?.statusCode || err?.response?.status
 
     if (statusCode === 401) {
@@ -55,7 +105,7 @@ export async function apiRequest<T>(
     if (statusCode === 403) {
       throw new Error(apiMessage || '没有权限执行此操作')
     }
-    throw new Error(apiMessage || err?.message || '网络请求失败，请稍后重试')
+    throw new Error(apiMessage || '网络请求失败，请稍后重试')
   }
 }
 
