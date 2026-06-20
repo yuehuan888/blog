@@ -16,3 +16,7 @@ export function deleteTag(id: number) {
 export function getTagCloud(sort: 'count' | 'hot' = 'count') {
   return api.get<TagCloudItem[]>('/api/tags/cloud', { sort })
 }
+
+export function getTagById(id: number) {
+  return api.get<Tag>(`/api/tags/${id}`)
+}

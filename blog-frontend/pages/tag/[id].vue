@@ -37,6 +37,7 @@
 import { NButton, NPagination, NIcon } from 'naive-ui'
 import { ArrowBackOutline } from '@vicons/ionicons5'
 import { getArticles } from '~/api/modules/article'
+import { getTagById } from '~/api/modules/tag'
 import type { Article } from '~/types'
 
 const route = useRoute()
@@ -65,6 +66,21 @@ async function fetchArticles(page = 1) {
   }
 }
 
-onMounted(fetchArticles)
-watch(tagId, () => fetchArticles())
+async function fetchTagName() {
+  try {
+    const tag = await getTagById(tagId.value)
+    tagName.value = tag.name
+  } catch {
+    tagName.value = '标签' + tagId.value
+  }
+}
+
+onMounted(() => {
+  fetchTagName()
+  fetchArticles()
+})
+watch(tagId, () => {
+  fetchTagName()
+  fetchArticles()
+})
 </script>

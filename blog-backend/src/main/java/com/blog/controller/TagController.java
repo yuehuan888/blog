@@ -42,4 +42,9 @@ public class TagController {
         }
         return Result.ok(tagService.getCloud(sort));
     }
+
+    @GetMapping("/{id}")
+    public Result<Tag> getById(@PathVariable Long id) {
+        return Result.ok(tagService.getById(id));
+    }
 }
