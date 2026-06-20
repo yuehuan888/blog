@@ -116,12 +116,8 @@ public class TagServiceImpl implements TagService {
 
     @Override
     public List<TagCloudItem> getCloud(String sort) {
-        List<Tag> tags;
-        if ("hot".equals(sort)) {
-            tags = tagMapper.selectWithHotScore();
-        } else {
-            tags = tagMapper.selectByArticleCountDesc();
-        }
+        // 实时 JOIN 已发布文章数，不依赖可能过时的 tag.article_count
+        List<Tag> tags = tagMapper.selectWithPublishedArticleCount();
 
         return tags.stream()
                 .map(t -> new TagCloudItem(

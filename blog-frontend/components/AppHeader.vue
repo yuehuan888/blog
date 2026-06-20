@@ -12,7 +12,7 @@
         <NuxtLink to="/" class="text-sm text-text-secondary hover:text-primary transition-colors">
           首页
         </NuxtLink>
-        <NuxtLink to="/tag/index" class="text-sm text-text-secondary hover:text-primary transition-colors">
+        <NuxtLink to="/tag" class="text-sm text-text-secondary hover:text-primary transition-colors">
           标签云
         </NuxtLink>
         <NuxtLink to="/article/hot" class="text-sm text-text-secondary hover:text-primary transition-colors">

@@ -28,10 +28,10 @@ public class TagStatsScheduler {
 
     @Scheduled(cron = "0 0 */6 * * ?")
     public void reconcileTagCounts() {
-        log.info("Reconciling tag article_counts...");
+        log.info("Reconciling tag article_counts (published only)...");
         List<Tag> allTags = tagMapper.selectList(null);
         for (Tag tag : allTags) {
-            int actual = articleTagMapper.selectArticleIdsByTagId(tag.getId()).size();
+            int actual = tagMapper.countPublishedArticles(tag.getId());
             if (actual != tag.getArticleCount()) {
                 log.info("Correcting tag '{}': {} -> {}", tag.getName(), tag.getArticleCount(), actual);
                 tag.setArticleCount(actual);

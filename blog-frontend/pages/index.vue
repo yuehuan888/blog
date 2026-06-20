@@ -35,7 +35,7 @@
         {{ tag.name }}
       </NTag>
       <NuxtLink
-        to="/tag/index"
+        to="/tag"
         class="text-xs text-primary ml-1 hover:underline flex-shrink-0"
       >
         更多标签 →

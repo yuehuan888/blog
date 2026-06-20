@@ -11,7 +11,7 @@
         </p>
         <div class="flex gap-4 text-xs text-text-secondary">
           <NuxtLink to="/" class="hover:text-primary">首页</NuxtLink>
-          <NuxtLink to="/tag/index" class="hover:text-primary">标签</NuxtLink>
+          <NuxtLink to="/tag" class="hover:text-primary">标签</NuxtLink>
           <NuxtLink to="/article/hot" class="hover:text-primary">热门</NuxtLink>
         </div>
       </div>
