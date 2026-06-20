@@ -92,9 +92,12 @@ npm run dev
 | 浏览公开内容 | 无需登录 |
 
 ### 登录状态持久化
-- JWT 存储在 localStorage，登录后即使刷新浏览器也保持登录态
-- `plugins/auth-persist.client.ts`：Nuxt SSR hydration 后从 localStorage 恢复 token，解决服务端渲染覆盖问题
-- 退出登录时清除 JWT、用户信息、本地草稿
+- JWT 存储在 **sessionStorage**（非 localStorage），每次新开窗口/标签页需重新登录
+- sessionStorage 每个标签页独立：刷新保持登录态，新窗口独立登录，关闭清除
+- 此设计支持多窗口多用户登录（如窗口 1 用户 a，窗口 2 用户 b）
+- 草稿清理仍使用 localStorage（跨标签共享，按 userId 隔离）
+- `plugins/auth-persist.client.ts`：Nuxt SSR hydration 后从 sessionStorage 恢复 token
+- `stores/auth.ts`：`getStore()` 封装 sessionStorage 读写，`updateUser()` 同步资料变更
 
 ## 关键业务逻辑
 
@@ -103,6 +106,14 @@ npm run dev
 - 草稿：保存到后端（status=draft），同时 localStorage 保留一份本地备份（key 按 userId 隔离，防止跨用户泄露）
 - 个人主页：区分「发布的文章」和「草稿」两个区域，草稿仅自己可见
 - 文章列表默认只返回 `status=published`
+
+### 首页无限滚动（2026-06-21 改）
+
+- 首页文章列表去掉了「加载更多」按钮，改为 IntersectionObserver 自动加载
+- 哨兵 `<div>` 放在列表底部，`rootMargin: 200px` 提前触发（用户无感知）
+- 首次加载显示全屏骨架（`loading=true`），追加加载显示底部小 spinner（`loadingMore=true`）
+- 追加加载不设置 `loading`，避免 DOM 重建导致页面跳到顶部
+- 切换标签时自动重置 `currentPage` 和 `hasMore`
 
 ### 文章删除（级联清理）
 删除文章时清除以下所有关联数据：
@@ -158,7 +169,18 @@ npm run dev
 - `GET /api/users/{id}` — 返回 UserDTO（含 `followerCount`、`followingCount`、`articleCount`、`followed` 字段）
 - `GET /api/users/{id}/followers`、`GET /api/users/{id}/following` — 分页查询粉丝/关注列表
 - 文章详情页：作者信息区显示头像+昵称+粉丝数+文章数+关注按钮（自己看自己文章不显示）
-- 用户主页：显示粉丝/关注/文章数量，非本人显示关注按钮，本人显示「编辑资料」占位
+- 用户主页：显示粉丝/关注/文章数量，非本人显示关注按钮，本人显示「编辑资料」按钮
+- `PUT /api/users/profile`：登录用户修改自己的昵称和头像，后端校验昵称非空
+- 编辑资料弹窗（`pages/user/[id].vue`）：NModal 表单，头像 FileReader 预览 + uploadAvatar 上传
+- 保存后同步更新 `authStore.updateUser()` → sessionStorage，AppHeader 头像/昵称即时刷新
+
+### 编辑资料（2026-06-21 新增）
+
+- 点击自己主页的「编辑资料」→ NModal 弹窗
+- 头像：圆形预览 + 「更换头像」按钮 → file input → FileReader 本地预览 → uploadAvatar 上传
+- 昵称：NInput 输入，30 字上限，不可为空
+- 保存：`PUT /api/users/profile` → 后端更新 DB → `authStore.updateUser()` 同步内存 + sessionStorage
+- 头像上传失败不影响昵称单独保存
 - CommentDTO 返回 `userNickname`、`userAvatar`，CommentServiceImpl 通过 `batchLoadUsers()` 批量查 user 表避免 N+1
 
 ### 头像上传
