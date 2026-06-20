@@ -17,6 +17,10 @@ export function getFollowing(userId: number, page = 1, size = 20) {
   return api.get<PageResult<UserProfile>>(`/api/users/${userId}/following`, { page, size })
 }
 
+export function updateProfile(data: { nickname?: string; avatar?: string }) {
+  return api.put<{ nickname: string; avatar: string }>('/api/users/profile', data)
+}
+
 export async function uploadAvatar(file: File): Promise<string> {
   const formData = new FormData()
   formData.append('file', file)

@@ -104,6 +104,14 @@ export const useAuthStore = defineStore('auth', () => {
     clearAuth()
   }
 
+  /** 更新当前用户资料（昵称/头像），同步更新 sessionStorage */
+  function updateUser(partial: { nickname?: string; avatar?: string }) {
+    if (!user.value) return
+    if (partial.nickname !== undefined) user.value.nickname = partial.nickname
+    if (partial.avatar !== undefined) user.value.avatar = partial.avatar
+    setItem('user', JSON.stringify(user.value))
+  }
+
   // 客户端启动时恢复 sessionStorage 中的登录态
   restoreFromStorage()
 
@@ -117,5 +125,6 @@ export const useAuthStore = defineStore('auth', () => {
     logout,
     clearAuth,
     restoreFromStorage,
+    updateUser,
   }
 })

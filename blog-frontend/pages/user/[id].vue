@@ -22,7 +22,7 @@
           </p>
         </div>
         <div v-if="isOwnProfile" class="ml-auto flex gap-2">
-          <NButton size="small" @click="isOwnProfile ? null : null">
+          <NButton size="small" @click="openEditModal">
             编辑资料
           </NButton>
           <NButton type="primary" size="small" @click="navigateTo('/article/write')">
@@ -119,13 +119,66 @@
         @update:page="(p: number) => { currentPage = p; fetchArticles() }"
       />
     </template>
+    <!-- 编辑资料弹窗 -->
+    <NModal
+      v-model:show="showEditModal"
+      preset="card"
+      title="编辑资料"
+      :style="{ width: '400px' }"
+      :mask-closable="false"
+    >
+      <div class="flex flex-col items-center gap-4">
+        <!-- 头像 -->
+        <div class="flex flex-col items-center gap-2">
+          <div
+            class="overflow-hidden flex items-center justify-center text-white font-bold"
+            :style="{
+              width: '72px', height: '72px', borderRadius: '50%',
+              background: editAvatarPreview ? 'transparent' : '#2D6A4F',
+              fontSize: '28px',
+            }"
+          >
+            <img
+              v-if="editAvatarPreview"
+              :src="editAvatarPreview"
+              class="w-full h-full object-cover"
+            />
+            <span v-else>{{ (editNickname || '?').charAt(0).toUpperCase() }}</span>
+          </div>
+          <NButton size="tiny" @click="triggerFileInput">更换头像</NButton>
+          <input
+            ref="fileInputRef"
+            type="file"
+            accept="image/*"
+            class="hidden"
+            @change="handleAvatarChange"
+          />
+        </div>
+
+        <!-- 昵称 -->
+        <NInput
+          v-model:value="editNickname"
+          placeholder="输入昵称"
+          maxlength="30"
+          show-count
+        />
+
+        <!-- 操作按钮 -->
+        <div class="flex gap-2 mt-2">
+          <NButton @click="showEditModal = false">取消</NButton>
+          <NButton type="primary" :loading="saving" @click="handleSaveProfile">
+            保存
+          </NButton>
+        </div>
+      </div>
+    </NModal>
   </div>
 </template>
 
 <script setup lang="ts">
-import { NCard, NButton, NPagination, NPopconfirm, useMessage } from 'naive-ui'
+import { NCard, NButton, NPagination, NPopconfirm, NModal, NInput, useMessage } from 'naive-ui'
 import { getArticles, deleteArticle } from '~/api/modules/article'
-import { getUserProfile, toggleFollow } from '~/api/modules/user'
+import { getUserProfile, toggleFollow, updateProfile, uploadAvatar } from '~/api/modules/user'
 import { useAuthStore } from '~/stores/auth'
 import type { Article, UserProfile } from '~/types'
 
@@ -143,6 +196,76 @@ const followLoading = ref(false)
 const loading = ref(true)
 const currentPage = ref(1)
 const totalPages = ref(1)
+
+// ========== 编辑资料弹窗 ==========
+const showEditModal = ref(false)
+const editNickname = ref('')
+const editAvatarPreview = ref('')
+const editAvatarFile = ref<File | null>(null)
+const saving = ref(false)
+const fileInputRef = ref<HTMLInputElement | null>(null)
+
+function openEditModal() {
+  editNickname.value = profileData.value?.nickname || profileData.value?.username || ''
+  editAvatarPreview.value = profileData.value?.avatar
+    ? (profileData.value.avatar.startsWith('http')
+      ? profileData.value.avatar
+      : `http://localhost:8080${profileData.value.avatar}`)
+    : ''
+  editAvatarFile.value = null
+  showEditModal.value = true
+}
+
+function triggerFileInput() {
+  fileInputRef.value?.click()
+}
+
+function handleAvatarChange(e: Event) {
+  const input = e.target as HTMLInputElement
+  const file = input.files?.[0]
+  if (!file) return
+  editAvatarFile.value = file
+  const reader = new FileReader()
+  reader.onload = () => {
+    editAvatarPreview.value = reader.result as string
+  }
+  reader.readAsDataURL(file)
+}
+
+async function handleSaveProfile() {
+  if (!editNickname.value.trim()) {
+    message.warning('昵称不能为空')
+    return
+  }
+
+  saving.value = true
+  try {
+    let avatarUrl: string | undefined
+    if (editAvatarFile.value) {
+      avatarUrl = await uploadAvatar(editAvatarFile.value)
+    }
+
+    const result = await updateProfile({
+      nickname: editNickname.value.trim(),
+      ...(avatarUrl ? { avatar: avatarUrl } : {}),
+    })
+
+    // 同步更新 authStore + sessionStorage
+    authStore.updateUser({
+      nickname: result.nickname,
+      avatar: result.avatar,
+    })
+
+    message.success('资料已更新')
+    showEditModal.value = false
+    // 刷新页面数据
+    await fetchProfile()
+  } catch (err: any) {
+    message.error(err.message || '保存失败')
+  } finally {
+    saving.value = false
+  }
+}
 
 const isOwnProfile = computed(() => authStore.user?.userId === profileUserId.value)
 const canDelete = computed(() => isOwnProfile.value || authStore.isAdmin)

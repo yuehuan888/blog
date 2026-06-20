@@ -15,6 +15,8 @@ import com.blog.util.AuthContext;
 import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.*;
 
+import java.util.Map;
+
 @RestController
 @RequestMapping("/api")
 @RequiredArgsConstructor
@@ -52,6 +54,39 @@ public class UserController {
         }
 
         return Result.ok(dto);
+    }
+
+    @PutMapping("/users/profile")
+    public Result<?> updateProfile(@RequestBody Map<String, String> body) {
+        Long userId = AuthContext.getUserId();
+        if (userId == null) {
+            return Result.fail(401, "Authentication required");
+        }
+
+        User user = userMapper.selectById(userId);
+        if (user == null) {
+            return Result.fail(404, "User not found");
+        }
+
+        String nickname = body.get("nickname");
+        String avatar = body.get("avatar");
+
+        if (nickname != null) {
+            if (nickname.isBlank()) {
+                return Result.fail(400, "昵称不能为空");
+            }
+            user.setNickname(nickname.trim());
+        }
+        if (avatar != null) {
+            user.setAvatar(avatar.trim());
+        }
+
+        userMapper.updateById(user);
+
+        return Result.ok(Map.of(
+                "nickname", user.getNickname() != null ? user.getNickname() : "",
+                "avatar", user.getAvatar() != null ? user.getAvatar() : ""
+        ));
     }
 
     @PostMapping("/users/{id}/follow")
