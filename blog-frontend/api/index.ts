@@ -43,15 +43,19 @@ export async function apiRequest<T>(
 
     return result.data as T
   } catch (err: any) {
-    if (err?.response?.status === 401) {
+    // ofetch FetchError: err.data = response body, err.statusCode = HTTP status
+    const apiMessage = err?.data?.message
+    const statusCode = err?.statusCode || err?.response?.status
+
+    if (statusCode === 401) {
       authStore.clearAuth()
       await navigateTo('/user/login')
-      throw new Error('登录已过期，请重新登录')
+      throw new Error(apiMessage || '登录已过期，请重新登录')
     }
-    if (err?.response?.status === 403) {
-      throw new Error('没有权限执行此操作')
+    if (statusCode === 403) {
+      throw new Error(apiMessage || '没有权限执行此操作')
     }
-    throw new Error(err?.message || '网络请求失败，请稍后重试')
+    throw new Error(apiMessage || err?.message || '网络请求失败，请稍后重试')
   }
 }
 
