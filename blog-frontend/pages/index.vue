@@ -68,25 +68,27 @@
         <ArticleCard v-for="article in articles" :key="article.id" :article="article" />
       </div>
 
-      <!-- Load More -->
-      <div v-if="hasMore" class="flex justify-center mt-8">
-        <NButton
-          :loading="loadingMore"
-          secondary
-          @click="loadMore"
-        >
-          加载更多
-        </NButton>
+      <!-- 滚动加载指示器 -->
+      <div v-if="loadingMore" class="flex justify-center py-8">
+        <NSpin size="small" />
       </div>
-      <p v-else class="text-center text-text-secondary text-sm mt-8">
+
+      <p v-else-if="!hasMore" class="text-center text-text-secondary text-sm mt-8">
         — 已经到底了 —
       </p>
+
+      <!-- IntersectionObserver 哨兵 -->
+      <div
+        v-if="hasMore && !loadingMore"
+        ref="sentinelRef"
+        class="h-1"
+      />
     </template>
   </div>
 </template>
 
 <script setup lang="ts">
-import { NTag, NButton, NResult } from 'naive-ui'
+import { NTag, NButton, NResult, NSpin } from 'naive-ui'
 import { getArticles, getHotArticles } from '~/api/modules/article'
 import { getTagCloud } from '~/api/modules/tag'
 import type { Article, HotArticleDTO, TagCloudItem } from '~/types'
@@ -101,6 +103,7 @@ const error = ref<string | null>(null)
 const currentPage = ref(1)
 const hasMore = ref(true)
 const pageSize = 12
+const sentinelRef = ref<HTMLElement | null>(null)
 
 async function fetchHotArticles() {
   try {
@@ -112,8 +115,11 @@ async function fetchHotArticles() {
 }
 
 async function fetchArticles(page = 1) {
-  loading.value = true
-  error.value = null
+  // 首次加载显示全屏骨架，追加加载不替换 DOM
+  if (page === 1) {
+    loading.value = true
+    error.value = null
+  }
 
   try {
     const params: Record<string, any> = {
@@ -134,7 +140,9 @@ async function fetchArticles(page = 1) {
     currentPage.value = page
     hasMore.value = result.records && result.records.length === pageSize
   } catch (err: any) {
-    error.value = err.message || '加载文章失败'
+    if (page === 1) {
+      error.value = err.message || '加载文章失败'
+    }
   } finally {
     loading.value = false
     loadingMore.value = false
@@ -142,6 +150,7 @@ async function fetchArticles(page = 1) {
 }
 
 async function loadMore() {
+  if (loadingMore.value || !hasMore.value) return
   loadingMore.value = true
   await fetchArticles(currentPage.value + 1)
 }
@@ -154,7 +163,34 @@ async function fetchTags() {
   }
 }
 
+// ========== 无限滚动 ==========
+
+let observer: IntersectionObserver | null = null
+
+function setupObserver() {
+  if (observer) observer.disconnect()
+  if (!sentinelRef.value) return
+
+  observer = new IntersectionObserver(
+    (entries) => {
+      if (entries[0]?.isIntersecting) {
+        loadMore()
+      }
+    },
+    { rootMargin: '200px' }, // 提前 200px 触发，用户无感知
+  )
+  observer.observe(sentinelRef.value)
+}
+
+// 每次 articles 更新后或切换标签后重新挂载哨兵
+watch([() => articles.value.length, activeTagId], () => {
+  nextTick(() => setupObserver())
+})
+
+// 切换标签时重置列表
 watch(activeTagId, () => {
+  currentPage.value = 1
+  hasMore.value = true
   fetchArticles(1)
 })
 
@@ -162,5 +198,9 @@ onMounted(() => {
   fetchHotArticles()
   fetchTags()
   fetchArticles()
+})
+
+onUnmounted(() => {
+  observer?.disconnect()
 })
 </script>
