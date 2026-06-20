@@ -34,6 +34,15 @@ export default defineNuxtConfig({
     },
   },
 
+  // Disable directory prefix for auto-imported components
+  // so components/common/UserAvatar.vue → <UserAvatar> (not <CommonUserAvatar>)
+  components: [
+    {
+      path: '~/components',
+      pathPrefix: false,
+    },
+  ],
+
   typescript: {
     strict: true,
     typeCheck: true,
