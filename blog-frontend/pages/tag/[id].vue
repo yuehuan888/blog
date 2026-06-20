@@ -43,7 +43,6 @@ import type { Article } from '~/types'
 const route = useRoute()
 const router = useRouter()
 
-const tagId = computed(() => Number(route.params.id))
 const tagName = ref('')
 const articles = ref<Article[]>([])
 const loading = ref(true)
@@ -51,10 +50,14 @@ const currentPage = ref(1)
 const totalPages = ref(1)
 const totalArticles = ref(0)
 
+function getTagId(): number {
+  return Number(route.params.id)
+}
+
 async function fetchArticles(page = 1) {
   loading.value = true
   try {
-    const result = await getArticles({ page, size: 12, tagId: tagId.value })
+    const result = await getArticles({ page, size: 12, tagId: getTagId() })
     articles.value = result.records || []
     currentPage.value = page
     totalPages.value = result.pages || 1
@@ -68,10 +71,10 @@ async function fetchArticles(page = 1) {
 
 async function fetchTagName() {
   try {
-    const tag = await getTagById(tagId.value)
+    const tag = await getTagById(getTagId())
     tagName.value = tag.name
   } catch {
-    tagName.value = '标签' + tagId.value
+    tagName.value = '标签' + getTagId()
   }
 }
 
@@ -79,7 +82,7 @@ onMounted(() => {
   fetchTagName()
   fetchArticles()
 })
-watch(tagId, () => {
+watch(() => route.params.id, () => {
   fetchTagName()
   fetchArticles()
 })
