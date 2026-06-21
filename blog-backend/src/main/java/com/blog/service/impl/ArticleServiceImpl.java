@@ -18,6 +18,8 @@ import com.blog.util.AuthContext;
 import java.util.Objects;
 import com.fasterxml.jackson.databind.JavaType;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import org.jsoup.Jsoup;
+import org.jsoup.safety.Safelist;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.amqp.rabbit.core.RabbitTemplate;
@@ -130,6 +132,7 @@ public class ArticleServiceImpl extends ServiceImpl<ArticleMapper, Article> impl
     @Override
     @Transactional
     public boolean save(Article entity) {
+        entity.setContent(sanitizeHtml(entity.getContent()));
         boolean result = super.save(entity);
 
         // Save images if provided
@@ -152,6 +155,7 @@ public class ArticleServiceImpl extends ServiceImpl<ArticleMapper, Article> impl
     @Override
     @Transactional
     public boolean updateById(Article entity) {
+        entity.setContent(sanitizeHtml(entity.getContent()));
         Article old = getById(entity.getId());
 
         // Update images if provided
@@ -353,7 +357,7 @@ public class ArticleServiceImpl extends ServiceImpl<ArticleMapper, Article> impl
             hasUpdate = true;
         }
         if (partial.getContent() != null) {
-            wrapper.set(Article::getContent, partial.getContent());
+            wrapper.set(Article::getContent, sanitizeHtml(partial.getContent()));
             hasUpdate = true;
         }
         if (partial.getCategory() != null) {
@@ -483,6 +487,29 @@ public class ArticleServiceImpl extends ServiceImpl<ArticleMapper, Article> impl
 
     private JavaType listMapType() {
         return objectMapper.getTypeFactory().constructCollectionType(List.class, Map.class);
+    }
+
+    // ==================== HTML 清洗 ====================
+
+    /**
+     * Sanitize HTML content from rich text editor.
+     * Preserves formatting tags (color, font-size, font-family) while stripping dangerous elements.
+     * Plain text passes through unchanged.
+     */
+    private String sanitizeHtml(String content) {
+        if (content == null) return null;
+        if (!content.trim().startsWith("<")) return content; // plain text, skip
+
+        Safelist safelist = Safelist.relaxed()
+                // Allow span for inline styles (color, font-size, font-family)
+                .addTags("span", "h1", "h2", "h3", "mark", "hr")
+                // Allow style attribute on span (for color, font-size, font-family)
+                .addAttributes("span", "style")
+                .addAttributes("mark", "style")
+                // Allow class on all elements
+                .addAttributes(":all", "class");
+
+        return Jsoup.clean(content, safelist);
     }
 
     // ==================== MQ 事件 ====================

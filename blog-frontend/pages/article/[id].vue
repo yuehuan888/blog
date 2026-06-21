@@ -299,6 +299,7 @@ import { ArrowBackOutline, TrashOutline, ChevronBackOutline, ChevronForwardOutli
 import { getArticleById, getArticleTags, getArticleStats, deleteArticle } from '~/api/modules/article'
 import { getUserProfile, toggleFollow } from '~/api/modules/user'
 import { useAuthStore } from '~/stores/auth'
+import DOMPurify from 'dompurify'
 import type { Article, Tag, UserProfile } from '~/types'
 
 const route = useRoute()
@@ -364,10 +365,18 @@ const isOwnArticle = computed(() => {
 })
 const renderedContent = computed(() => {
   if (!article.value?.content) return ''
-  return article.value.content
-    .split('\n')
-    .map(line => line.trim() ? `<p>${line}</p>` : '')
-    .join('')
+  const c = article.value.content.trim()
+  // Detect HTML (from rich editor) vs plain text (legacy articles)
+  let html: string
+  if (c.startsWith('<') && /<\/[a-z][\s\S]*>/i.test(c)) {
+    html = c // Rich text HTML
+  } else {
+    // Legacy plain text: \n → <p> wrapping
+    html = c.split('\n')
+      .map(line => line.trim() ? `<p>${line}</p>` : '')
+      .join('')
+  }
+  return DOMPurify.sanitize(html)
 })
 
 function formatDate(dateStr: string): string {

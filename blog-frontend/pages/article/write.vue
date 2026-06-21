@@ -90,12 +90,7 @@
         </NFormItem>
 
         <NFormItem path="content" label="内容">
-          <NInput
-            v-model:value="form.content"
-            type="textarea"
-            placeholder="写下你想分享的内容..."
-            :autosize="{ minRows: 12, maxRows: 30 }"
-          />
+          <RichEditor v-model="form.content" />
         </NFormItem>
       </NForm>
     </NCard>
@@ -414,6 +409,12 @@ async function publish() {
     await formRef.value?.validate()
   } catch {
     message.warning('请填写必填项')
+    return
+  }
+  // Validate rich text content (not auto-validated by NForm)
+  const textContent = form.content.replace(/<[^>]*>/g, '').trim()
+  if (!textContent) {
+    message.warning('请输入内容')
     return
   }
   await saveArticle('published')
