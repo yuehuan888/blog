@@ -360,8 +360,19 @@ async function saveArticle(status: 'draft' | 'published') {
     let articleId: number
 
     if (editingArticleId.value) {
-      await updateArticle(editingArticleId.value, { title: form.title, category, content: form.content, status, images: imageUrls })
-      articleId = editingArticleId.value
+      try {
+        await updateArticle(editingArticleId.value, { title: form.title, category, content: form.content, status, images: imageUrls })
+        articleId = editingArticleId.value
+      } catch (err: any) {
+        // 如果文章已被删除（localStorage 残留 ID），回退为创建新文章
+        if (err.message?.includes('文章不存在') || err.message?.includes('Article not found')) {
+          const article = await createArticle({ title: form.title, category, content: form.content, status, images: imageUrls })
+          articleId = article.id
+          editingArticleId.value = article.id
+        } else {
+          throw err
+        }
+      }
     } else {
       const article = await createArticle({ title: form.title, category, content: form.content, status, images: imageUrls })
       articleId = article.id
