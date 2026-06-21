@@ -27,10 +27,10 @@
   >
     <!-- Left: Image Column -->
     <div
-      class="lg:w-1/2 lg:flex-shrink-0 bg-black overflow-y-auto"
+      class="lg:w-[42%] lg:flex-shrink-0 bg-black overflow-y-auto flex flex-col items-center"
       style="scrollbar-width: none; -ms-overflow-style: none;"
     >
-      <div class="sticky top-0 z-10 flex items-center justify-between px-4 py-3 bg-gradient-to-b from-black/80 to-transparent">
+      <div class="sticky top-0 z-10 w-full flex items-center justify-between px-4 py-3 bg-gradient-to-b from-black/80 to-transparent">
         <NButton text size="small" @click="router.back()" class="!text-white">
           <template #icon>
             <NIcon size="18"><ArrowBackOutline /></NIcon>
@@ -41,7 +41,7 @@
           {{ article.images.length }} 张图片
         </span>
       </div>
-      <div class="px-4 pb-6 space-y-4">
+      <div class="px-8 lg:px-12 pb-6 space-y-6 w-full">
         <img
           v-for="(img, i) in article.images"
           :key="i"
@@ -55,7 +55,7 @@
     </div>
 
     <!-- Right: Content Column (desktop) -->
-    <div class="hidden lg:block lg:w-1/2 overflow-y-auto px-6 py-6 border-l border-gray-100">
+    <div class="hidden lg:block lg:w-[58%] overflow-y-auto px-6 py-6 border-l border-gray-100">
       <!-- Author Info -->
       <div v-if="article.authorId" class="flex items-center gap-3 mb-4 p-3 bg-gray-50 rounded-card">
         <div class="cursor-pointer flex items-center gap-3 flex-1" @click="navigateTo(`/user/${article.authorId}`)">
