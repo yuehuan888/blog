@@ -43,13 +43,10 @@
     </div>
 
     <!-- Article Waterfall Grid -->
-    <div v-if="loading" class="flex flex-wrap gap-4">
-      <div
-        v-for="i in 8"
-        :key="i"
-        class="skeleton rounded-card"
-        :style="{ width: `calc(${100 / columnCount}% - ${gap * (columnCount - 1) / columnCount}px - 1px)`, height: (140 + (i % 3) * 40) + 'px' }"
-      />
+    <div v-if="loading" class="columns-2 md:columns-3 lg:columns-4 gap-5">
+      <div v-for="i in 8" :key="i" class="break-inside-avoid mb-5">
+        <div class="skeleton rounded-card" :style="{ height: (140 + (i % 3) * 40) + 'px' }" />
+      </div>
     </div>
 
     <div v-else-if="error" class="flex flex-col items-center py-20">
@@ -69,12 +66,11 @@
     </div>
 
     <template v-else>
-      <div ref="masonryRef" class="masonry-container relative w-full" :style="{ height: containerHeight + 'px' }">
+      <div class="columns-2 md:columns-3 lg:columns-4 gap-5">
         <div
-          v-for="(article, i) in articles"
+          v-for="article in articles"
           :key="article.id"
-          class="masonry-item absolute transition-all duration-300"
-          :style="getCardStyle(i)"
+          class="break-inside-avoid mb-5"
         >
           <ArticleCard :article="article" />
         </div>
@@ -116,91 +112,6 @@ const currentPage = ref(1)
 const hasMore = ref(true)
 const pageSize = 12
 const sentinelRef = ref<HTMLElement | null>(null)
-
-// ========== Masonry Layout ==========
-const masonryRef = ref<HTMLElement | null>(null)
-const columnCount = ref(3)
-const gap = 16
-const containerHeight = ref(600)
-
-interface CardPos {
-  left: string
-  top: string
-  width: string
-}
-
-const cardPositions = ref<CardPos[]>([])
-
-function updateColumnCount() {
-  if (!import.meta.client) return
-  const w = window.innerWidth
-  const oldCount = columnCount.value
-  if (w < 640) columnCount.value = 2
-  else if (w < 1024) columnCount.value = 3
-  else columnCount.value = 4
-  if (oldCount !== columnCount.value) {
-    nextTick(() => layoutCards())
-  }
-}
-
-function getColumnWidth(): number {
-  if (!masonryRef.value) return 280
-  const w = masonryRef.value.clientWidth
-  if (w <= 0) return 280
-  return (w - gap * (columnCount.value - 1)) / columnCount.value
-}
-
-function estimateCardHeight(article: Article): number {
-  let h = 120 // base: title + meta + padding
-  if (article.coverImage) {
-    h = 250 // image card
-  }
-  // Use deterministic variation based on article id
-  const variation = article.id ? (article.id % 3) * 15 : 0
-  return h + variation
-}
-
-function layoutCards() {
-  const n = articles.value.length
-  if (n === 0 || columnCount.value === 0) {
-    containerHeight.value = 0
-    return
-  }
-
-  const colWidth = getColumnWidth()
-  const heights = new Array(columnCount.value).fill(0)
-  const positions: CardPos[] = []
-
-  for (let i = 0; i < n; i++) {
-    // Find shortest column
-    let minCol = 0
-    for (let c = 1; c < columnCount.value; c++) {
-      if (heights[c] < heights[minCol]) minCol = c
-    }
-
-    const cardHeight = estimateCardHeight(articles.value[i])
-    positions.push({
-      left: (minCol * (colWidth + gap)) + 'px',
-      top: heights[minCol] + 'px',
-      width: colWidth + 'px',
-    })
-    heights[minCol] += cardHeight + gap
-  }
-
-  cardPositions.value = positions
-  containerHeight.value = Math.max(...heights, 200)
-}
-
-function getCardStyle(index: number): Record<string, string> {
-  if (index < cardPositions.value.length) {
-    return cardPositions.value[index] as Record<string, string>
-  }
-  return { left: '0px', top: '0px', width: '200px' }
-}
-
-function handleResize() {
-  updateColumnCount()
-}
 
 async function fetchHotArticles() {
   try {
@@ -282,7 +193,6 @@ function setupObserver() {
 // 每次 articles 更新后或切换标签后重新挂载哨兵
 watch([() => articles.value.length, activeTagId], () => {
   nextTick(() => {
-    layoutCards()
     setupObserver()
   })
 })
@@ -291,19 +201,16 @@ watch([() => articles.value.length, activeTagId], () => {
 watch(activeTagId, () => {
   currentPage.value = 1
   hasMore.value = true
-  fetchArticles(1).then(() => nextTick(() => layoutCards()))
+  fetchArticles(1)
 })
 
 onMounted(() => {
-  updateColumnCount()
   fetchHotArticles()
   fetchTags()
-  fetchArticles().then(() => nextTick(() => layoutCards()))
-  window.addEventListener('resize', handleResize)
+  fetchArticles()
 })
 
 onUnmounted(() => {
   observer?.disconnect()
-  window.removeEventListener('resize', handleResize)
 })
 </script>
