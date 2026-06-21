@@ -171,24 +171,29 @@ async function handleImageSelect(e: Event) {
   }
 
   // Upload all in parallel
-  const results = await Promise.allSettled(
+  const results = await Promise.all(
     fileList.map((file, i) => {
-      return uploadArticleImage(file).then(url => {
-        return { index: startIdx + i, url }
-      })
+      const idx = startIdx + i
+      return uploadArticleImage(file)
+        .then(url => {
+          uploadedImages.value[idx] = url.startsWith('http')
+            ? url
+            : `http://localhost:8080${url}`
+          uploadingStates.value[idx] = false
+        })
+        .catch(err => {
+          message.error(`上传失败: ${err.message || '未知错误'}`)
+          uploadedImages.value[idx] = '' // mark as failed
+          uploadingStates.value[idx] = false
+        })
     })
   )
 
-  for (const result of results) {
-    if (result.status === 'fulfilled') {
-      const { index, url } = result.value as { index: number; url: string }
-      uploadedImages.value[index] = url.startsWith('http')
-        ? url
-        : `http://localhost:8080${url}`
-      uploadingStates.value[index] = false
-    } else {
-      const err = (result as PromiseRejectedResult).reason
-      message.error(`上传失败: ${err.message || '未知错误'}`)
+  // Remove any failed uploads (marked as empty string)
+  for (let i = uploadedImages.value.length - 1; i >= 0; i--) {
+    if (uploadedImages.value[i] === '' && !uploadingStates.value[i]) {
+      uploadedImages.value.splice(i, 1)
+      uploadingStates.value.splice(i, 1)
     }
   }
 
