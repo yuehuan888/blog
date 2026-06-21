@@ -1,13 +1,33 @@
 <template>
   <NCard
-    class="article-card overflow-hidden transition-all duration-300 hover:shadow-md hover:-translate-y-1"
+    class="article-card overflow-hidden transition-all duration-300 hover:shadow-md hover:-translate-y-1 cursor-pointer"
     :bordered="false"
     size="small"
     @click="navigateTo(`/article/${article.id}`)"
   >
-    <!-- Cover Image Placeholder -->
+    <!-- Cover Image -->
+    <div v-if="article.coverImage && !imgFailed" class="relative overflow-hidden bg-gray-100">
+      <img
+        :src="imageUrl(article.coverImage)"
+        :alt="article.title"
+        class="w-full block object-cover"
+        :style="{ minHeight: '120px', maxHeight: '320px' }"
+        loading="lazy"
+        @error="imgFailed = true"
+      />
+      <!-- Multi-image count badge -->
+      <span
+        v-if="article.imageCount && article.imageCount > 1"
+        class="absolute bottom-2 right-2 bg-black/60 text-white text-xs px-1.5 py-0.5 rounded"
+      >
+        +{{ article.imageCount - 1 }}
+      </span>
+    </div>
+
+    <!-- No-image fallback -->
     <div
-      class="h-32 bg-gradient-to-br from-primary-pale to-primary/10 flex items-center justify-center text-4xl"
+      v-else
+      class="h-24 bg-gradient-to-br from-primary-pale to-primary/10 flex items-center justify-center text-3xl"
     >
       {{ coverEmoji }}
     </div>
@@ -46,7 +66,7 @@
       </div>
 
       <!-- Meta -->
-      <div class="flex items-center justify-between text-xs text-text-secondary">
+      <div class="flex items-center justify-between text-xs text-text-secondary mt-1">
         <div class="flex items-center gap-3">
           <span class="flex items-center gap-1">
             <NIcon size="14"><EyeOutline /></NIcon>
@@ -73,12 +93,15 @@ import { getArticleTags } from '~/api/modules/article'
 import { getUserProfile } from '~/api/modules/user'
 import type { Article, Tag, UserProfile } from '~/types'
 
+const API_BASE = 'http://localhost:8080'
+
 const props = defineProps<{
   article: Article
 }>()
 
 const tags = ref<Tag[]>([])
 const author = ref<UserProfile | null>(null)
+const imgFailed = ref(false)
 
 const emojis = ['📝', '🌿', '📷', '🎨', '🍃', '✨', '📖', '🌸', '🌲', '🖋️']
 
@@ -87,13 +110,18 @@ const coverEmoji = computed(() => {
   return emojis[hash % emojis.length]
 })
 
+function imageUrl(src: string): string {
+  if (!src) return ''
+  if (src.startsWith('http://') || src.startsWith('https://')) return src
+  return API_BASE + src
+}
+
 function formatCount(n: number): string {
   if (n >= 10000) return (n / 10000).toFixed(1) + 'w'
   if (n >= 1000) return (n / 1000).toFixed(1) + 'k'
   return String(n)
 }
 
-// Fetch tags and author for this article
 async function fetchTags() {
   try {
     tags.value = await getArticleTags(props.article.id)
@@ -103,13 +131,18 @@ async function fetchTags() {
 }
 
 async function fetchAuthor() {
-  if (!props.article.authorId) return // skip articles without author
+  if (!props.article.authorId) return
   try {
     author.value = await getUserProfile(props.article.authorId)
   } catch {
     // Non-critical
   }
 }
+
+// Reset imgFailed when coverImage changes
+watch(() => props.article.coverImage, () => {
+  imgFailed.value = false
+})
 
 onMounted(() => {
   fetchTags()
