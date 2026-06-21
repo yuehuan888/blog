@@ -136,6 +136,17 @@ npm run dev
 - `ImageCleanupScheduler`：每天 3:00 清理 24h+ 未关联的孤儿图片文件
 - `spring.servlet.multipart.max-file-size` 已提升至 5MB（适配文章图片上传）
 
+### 富文本编辑器（2026-06-21 新增）
+
+- **Tiptap** 富文本编辑器替代原纯文本 textarea，组件 `RichEditor.vue`
+- 工具栏：字体族（6种）、字号（7档 12-30px）、文字颜色（12色）、背景高亮（9色）、粗体/斜体/下划线/删除线、H1/H2/H3、无序/有序列表、引用块、分隔线、撤销/重做
+- **字体大小**：自定义 Tiptap Mark `FontSize`，基于 `TextStyle` 扩展，注入 `style="font-size:..."` 实现
+- **v-model 双向绑定**：`watch` prop 变化同步 `setContent`（防光标跳动），`onUpdate` 发射 HTML
+- **内容存储**：`article.content` 直接存储 HTML 字符串（MySQL TEXT 类型）
+- **向后兼容**：`[id].vue` 的 `renderedContent` 自动检测内容类型——以 `<` 开头且有闭合标签视为 HTML 富文本，否则走原 `\n` → `<p>` 包裹逻辑
+- **XSS 防护**：前端 `DOMPurify.sanitize()` + 后端 `Jsoup.clean()` （`Safelist.relaxed()` + `span[style]`、`mark[style]`），`ArticleServiceImpl.sanitizeHtml()` 在 `save()`/`updateById()`/`patch()` 中调用
+- **依赖**：`@tiptap/vue-3`、`@tiptap/starter-kit`、`@tiptap/extension-{color,font-family,text-style,underline,text-align,highlight}`、`dompurify`、`@types/dompurify`（前端）；`org.jsoup:jsoup:1.18.1`（后端）
+
 ### 文章删除（级联清理）
 删除文章时清除以下所有关联数据：
 - article_image（图片记录 + 服务器文件）
