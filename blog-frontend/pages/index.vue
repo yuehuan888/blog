@@ -43,9 +43,9 @@
     </div>
 
     <!-- Skeleton Loading -->
-    <div v-if="loading" class="columns-2 md:columns-3 lg:columns-4 gap-5">
-      <div v-for="i in 8" :key="i" class="break-inside-avoid mb-5">
-        <div class="skeleton rounded-card" :style="{ height: (140 + (i % 3) * 40) + 'px' }" />
+    <div v-if="loading" class="flex gap-5 items-start">
+      <div v-for="col in colCount" :key="col" class="flex-1 flex flex-col gap-5">
+        <div v-for="i in 3" :key="i" class="skeleton rounded-card" :style="{ height: (140 + ((col + i) % 3) * 50) + 'px' }" />
       </div>
     </div>
 
@@ -67,17 +67,19 @@
       />
     </div>
 
-    <!-- JS Masonry Waterfall -->
+    <!-- Multi-column waterfall: cards assigned to columns, never move between columns -->
     <template v-else>
-      <div ref="masonryContainer" class="relative" :style="{ height: containerHeight + 'px' }">
+      <div class="flex gap-5 items-start">
         <div
-          v-for="(article, index) in articles"
-          :key="article.id"
-          data-card
-          class="absolute transition-all duration-300 ease-out"
-          :style="cardStyle(index)"
+          v-for="(colCards, colIdx) in columnCards"
+          :key="colIdx"
+          class="flex-1 flex flex-col gap-5 min-w-0"
         >
-          <ArticleCard :article="article" />
+          <ArticleCard
+            v-for="article in colCards"
+            :key="article.id"
+            :article="article"
+          />
         </div>
       </div>
 
@@ -113,105 +115,38 @@ const currentPage = ref(1)
 const hasMore = ref(true)
 const pageSize = 12
 const sentinelRef = ref<HTMLElement | null>(null)
-const masonryContainer = ref<HTMLElement | null>(null)
 
-// ========== Masonry Layout ==========
-const columnCount = ref(4)
-const gap = 20
-const columnHeights = ref<number[]>([])
-const containerWidth = ref(0)
-const cardWidth = ref(0)
-const containerHeight = ref(0)
-const cardPositions = ref<{ left: number; top: number; width: number; height: number }[]>([])
-let resizeObserver: ResizeObserver | null = null
+// ========== Column distribution ==========
+const colCount = ref(4)
+// Each column holds its own list of articles — once assigned, a card stays in its column forever
+const columnCards = ref<Article[][]>([[], [], [], []])
 
-function getColumnCount() {
-  if (typeof window === 'undefined') return 4
+function updateColCount() {
+  if (typeof window === 'undefined') { colCount.value = 4; return }
   const w = window.innerWidth
-  if (w < 640) return 2
-  if (w < 1024) return 3
-  return 4
+  if (w < 640) colCount.value = 2
+  else if (w < 1024) colCount.value = 3
+  else colCount.value = 4
 }
 
-function cardStyle(index: number) {
-  const pos = cardPositions.value[index]
-  if (!pos) return { visibility: 'hidden' as const }
-  return {
-    left: pos.left + 'px',
-    top: pos.top + 'px',
-    width: pos.width + 'px',
-  }
-}
-
-async function layoutCards(startIndex = 0) {
-  if (!masonryContainer.value) return
-
-  // Initialize column heights and container width on first layout
-  if (startIndex === 0) {
-    columnCount.value = getColumnCount()
-    containerWidth.value = masonryContainer.value.clientWidth
-    cardWidth.value = (containerWidth.value - gap * (columnCount.value - 1)) / columnCount.value
-    columnHeights.value = new Array(columnCount.value).fill(0)
-    cardPositions.value = new Array(articles.value.length)
-  }
-
-  // Layout each card starting from startIndex
-  for (let i = startIndex; i < articles.value.length; i++) {
-    // Find shortest column
-    const col = columnHeights.value.indexOf(Math.min(...columnHeights.value))
-    const left = col * (cardWidth.value + gap)
-    const top = columnHeights.value[col]
-
-    cardPositions.value[i] = {
-      left,
-      top,
-      width: cardWidth.value,
-      height: 0, // will be updated by ResizeObserver
+function distributeToColumns(newArticles: Article[], isReset: boolean) {
+  if (isReset) {
+    // Reset: clear all columns, redistribute everything
+    columnCards.value = Array.from({ length: colCount.value }, () => [])
+    for (const article of newArticles) {
+      // Find column with fewest cards
+      const shortest = columnCards.value.reduce((best, col, i) =>
+        col.length < columnCards.value[best].length ? i : best, 0)
+      columnCards.value[shortest].push(article)
     }
-
-    // Estimate height based on content (will be refined by ResizeObserver)
-    const estimatedHeight = estimateCardHeight(articles.value[i])
-    columnHeights.value[col] += estimatedHeight + gap
-  }
-
-  containerHeight.value = Math.max(...columnHeights.value, 100)
-}
-
-function estimateCardHeight(article: Article): number {
-  // Rough estimate: base + image area + text
-  let h = 120 // padding + meta + title
-  if (article.coverImage) {
-    h += cardWidth.value * 0.75 // image at ~4:3 ratio
-  }
-  if (article.content) {
-    h += Math.min(article.content.length / 3, 60)
-  }
-  return h
-}
-
-function measureRealHeights() {
-  if (!masonryContainer.value) return
-
-  const cardEls = masonryContainer.value.querySelectorAll<HTMLElement>('[data-card]')
-  cardEls.forEach((el, i) => {
-    if (i < cardPositions.value.length && cardPositions.value[i]) {
-      cardPositions.value[i].height = el.offsetHeight
+  } else {
+    // Append: distribute new cards to shortest columns
+    for (const article of newArticles) {
+      const shortest = columnCards.value.reduce((best, col, i) =>
+        col.length < columnCards.value[best].length ? i : best, 0)
+      columnCards.value[shortest].push(article)
     }
-  })
-}
-
-// Re-layout on window resize (debounced)
-let resizeTimer: ReturnType<typeof setTimeout> | null = null
-function onResize() {
-  if (resizeTimer) clearTimeout(resizeTimer)
-  resizeTimer = setTimeout(() => {
-    const newColCount = getColumnCount()
-    if (newColCount !== columnCount.value && articles.value.length > 0) {
-      columnCount.value = newColCount
-      layoutCards(0)
-      nextTick(() => measureRealHeights())
-    }
-  }, 200)
+  }
 }
 
 // ========== Data Fetching ==========
@@ -241,30 +176,27 @@ async function fetchArticles(page = 1) {
     }
 
     const result = await getArticles(params)
-    if (page === 1) {
-      articles.value = result.records || []
-    } else {
-      articles.value.push(...(result.records || []))
-    }
-    currentPage.value = page
-    hasMore.value = result.records && result.records.length === pageSize
+    const newRecords = result.records || []
 
-    // Layout cards after DOM update
-    await nextTick()
     if (page === 1) {
-      layoutCards(0)
+      articles.value = newRecords
+      distributeToColumns(newRecords, true)
+      loading.value = false
     } else {
-      layoutCards(articles.value.length - (result.records?.length || 0))
+      articles.value.push(...newRecords)
+      distributeToColumns(newRecords, false)
+      loadingMore.value = false
     }
-    await nextTick()
-    measureRealHeights()
+
+    currentPage.value = page
+    hasMore.value = newRecords.length === pageSize
   } catch (err: any) {
     if (page === 1) {
+      loading.value = false
       error.value = err.message || '加载文章失败'
+    } else {
+      loadingMore.value = false
     }
-  } finally {
-    loading.value = false
-    loadingMore.value = false
   }
 }
 
@@ -291,9 +223,7 @@ function setupObserver() {
 
   observer = new IntersectionObserver(
     (entries) => {
-      if (entries[0]?.isIntersecting) {
-        loadMore()
-      }
+      if (entries[0]?.isIntersecting) loadMore()
     },
     { rootMargin: '200px' },
   )
@@ -301,9 +231,7 @@ function setupObserver() {
 }
 
 watch([() => articles.value.length, activeTagId], () => {
-  nextTick(() => {
-    setupObserver()
-  })
+  nextTick(() => setupObserver())
 })
 
 watch(activeTagId, () => {
@@ -312,43 +240,26 @@ watch(activeTagId, () => {
   fetchArticles(1)
 })
 
+// Handle responsive column count
+function onResize() {
+  const prev = colCount.value
+  updateColCount()
+  if (colCount.value !== prev && articles.value.length > 0) {
+    // Redistribute ALL articles with new column count
+    distributeToColumns(articles.value, true)
+  }
+}
+
 onMounted(() => {
+  updateColCount()
   fetchHotArticles()
   fetchTags()
   fetchArticles()
   window.addEventListener('resize', onResize)
-
-  // Set up ResizeObserver on the container to catch image loads
-  nextTick(() => {
-    if (masonryContainer.value) {
-      resizeObserver = new ResizeObserver(() => {
-        measureRealHeights()
-        // Recalculate column heights based on real measurements
-        recalcColumnHeights()
-      })
-      resizeObserver.observe(masonryContainer.value)
-    }
-  })
 })
 
 onUnmounted(() => {
   observer?.disconnect()
-  resizeObserver?.disconnect()
   window.removeEventListener('resize', onResize)
-  if (resizeTimer) clearTimeout(resizeTimer)
 })
-
-function recalcColumnHeights() {
-  // Recalculate container height from actual card bottoms (handles image loads)
-  let maxBottom = 100
-  for (let i = 0; i < cardPositions.value.length; i++) {
-    const pos = cardPositions.value[i]
-    if (!pos) continue
-    const bottom = pos.top + pos.height + gap
-    if (bottom > maxBottom) maxBottom = bottom
-  }
-  if (maxBottom !== containerHeight.value) {
-    containerHeight.value = maxBottom
-  }
-}
 </script>
