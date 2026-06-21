@@ -127,16 +127,17 @@ com.blog
 
 `ArticleServiceImpl.removeById()` 删除文章时**完整清理所有关联数据**：
 
-1. 删除 article_tag 关联 + 更新 tag.article_count
-2. 删除 article_like 全部记录
-3. 删除 article_favorite 全部记录
-4. 删除 article_read 全部记录
-5. 删除 comment_like（通过 commentId）+ 删除 comment
-6. 删除 article_history 全部记录
-7. 删除 article 本身
-8. 清理 Redis：article 缓存、like/favorite Set、hot ZSET、categoryStats、tag cloud
+1. 删除 article_image 记录 + 服务器图片文件
+2. 删除 article_tag 关联 + 更新 tag.article_count
+3. 删除 article_like 全部记录
+4. 删除 article_favorite 全部记录
+5. 删除 article_read 全部记录
+6. 删除 comment_like（通过 commentId）+ 删除 comment
+7. 删除 article_history 全部记录
+8. 删除 article 本身
+9. 清理 Redis：article 缓存、like/favorite Set、hot ZSET、categoryStats、tag cloud
 
-新增 Mapper 方法：`ArticleLikeMapper.deleteByArticleId`、`ArticleFavoriteMapper.deleteByArticleId`、`CommentMapper.deleteByArticleId`/`selectIdsByArticleId`、`CommentLikeMapper.deleteByCommentIds`
+新增 Mapper 方法：`ArticleImageMapper.deleteByArticleId`/`selectByArticleId`、`ArticleLikeMapper.deleteByArticleId`、`ArticleFavoriteMapper.deleteByArticleId`、`CommentMapper.deleteByArticleId`/`selectIdsByArticleId`、`CommentLikeMapper.deleteByCommentIds`
 
 ## 查询参数
 
@@ -200,6 +201,7 @@ com.blog
 | GET | `/api/users/{id}/followers?page=&size=` | 粉丝列表 |
 | GET | `/api/users/{id}/following?page=&size=` | 关注列表 |
 | POST | `/api/upload/avatar` | 上传头像（免鉴权，max 2MB） |
+| POST | `/api/upload/article-image` | 上传文章配图（免鉴权，max 5MB） |
 
 ## Redis Key 设计总览
 
@@ -332,6 +334,7 @@ com.blog
 | `tag` | 标签主表 | UNIQUE(name), article_count, hot_score |
 | `article_tag` | 文章-标签多对多 | UNIQUE(article_id, tag_id) |
 | `article_history` | 文章版本历史 | INDEX(article_id, version_no), change_type |
+| `article_image` | 文章配图 | INDEX(article_id), url + sort_order 排序 |
 | `comment` | 评论 | parent_id/reply_to 嵌套，status 状态控制，INDEX(article_id, parent_id) |
 | `comment_like` | 评论点赞 | UNIQUE(comment_id, user_id) |
 | `user` | 用户表 | UNIQUE(username), nickname, avatar, role 区分 admin/user |

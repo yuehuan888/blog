@@ -115,8 +115,29 @@ npm run dev
 - 追加加载不设置 `loading`，避免 DOM 重建导致页面跳到顶部
 - 切换标签时自动重置 `currentPage` 和 `hasMore`
 
+### 首页瀑布流布局（2026-06-21 改）
+
+- 卡片布局从固定 CSS Grid 改为 JS Masonry 瀑布流
+- 列数响应式：2 列（<640px）/ 3 列（640-1024px）/ 4 列（≥1024px）
+- 每张卡片放入当前最矮列，自然错落
+- 切换标签时重算布局，resize 时自适应列数
+
+### 文章图片系统（2026-06-21 新增）
+
+- 每篇文章最多 9 张图片，独立存储于 `article_image` 表
+- `POST /api/upload/article-image`：免鉴权上传端点，单张 ≤ 5MB，存入 `uploads/articles/`
+- 文章列表 API 返回 `coverImage`（首图）和 `imageCount`（总图数）
+- 文章详情 API 返回 `images: string[]`（全部图片 URL，按 sort_order 排序）
+- ArticleCard：有图显示封面 + 右下角 +N 角标，无图回退为 emoji 占位
+- 文章详情页：标题下方 CSS scroll-snap 横向轮播（360px），点击图片弹出全屏灯箱
+- 写文章页：标题下方即时上传区，支持多选、删除，草稿保留已上传图片
+- 级联删除：文章删除时清理 `article_image` 记录 + 服务器文件
+- `ImageCleanupScheduler`：每天 3:00 清理 24h+ 未关联的孤儿图片文件
+- `spring.servlet.multipart.max-file-size` 已提升至 5MB（适配文章图片上传）
+
 ### 文章删除（级联清理）
 删除文章时清除以下所有关联数据：
+- article_image（图片记录 + 服务器文件）
 - article_tag（标签关联，并更新 tag.article_count）
 - article_like / article_favorite（点赞/收藏）
 - article_read（阅读记录）
