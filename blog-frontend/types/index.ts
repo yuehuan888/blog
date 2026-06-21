@@ -13,6 +13,9 @@ export interface Article {
   authorId: number | null
   createdAt: string
   updatedAt: string
+  coverImage: string | null
+  images: string[]
+  imageCount: number
 }
 
 export interface User {

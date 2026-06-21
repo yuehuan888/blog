@@ -1,4 +1,4 @@
-import { api } from '~/api/index'
+import { api, apiRequest } from '~/api/index'
 import type {
   Article,
   ArticleHistory,
@@ -80,4 +80,14 @@ export function getArticleHistoryDetail(articleId: number, historyId: number) {
 
 export function rollbackArticle(articleId: number, historyId: number) {
   return api.post<Article>(`/api/articles/${articleId}/rollback/${historyId}`)
+}
+
+export async function uploadArticleImage(file: File): Promise<string> {
+  const formData = new FormData()
+  formData.append('file', file)
+  const result = await apiRequest<{ url: string }>('/api/upload/article-image', {
+    method: 'POST',
+    body: formData,
+  })
+  return result.url
 }
