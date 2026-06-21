@@ -110,3 +110,12 @@ CREATE TABLE IF NOT EXISTS user_follow (
     INDEX idx_follower (follower_id),
     INDEX idx_following (following_id)
 );
+
+CREATE TABLE IF NOT EXISTS article_image (
+    id         BIGINT AUTO_INCREMENT PRIMARY KEY,
+    article_id BIGINT NOT NULL,
+    url        VARCHAR(500) NOT NULL,
+    sort_order INT NOT NULL DEFAULT 0,
+    created_at DATETIME NOT NULL,
+    INDEX idx_article_id (article_id)
+);
