@@ -1,5 +1,6 @@
 import type { Result } from '~/types'
 import { useAuthStore } from '~/stores/auth'
+import { $fetch } from 'ofetch'
 
 // 后端英文错误消息 → 中文翻译映射
 const ERROR_ZH: Record<string, string> = {
@@ -55,6 +56,7 @@ interface RequestOptions {
   method?: 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE'
   body?: any
   params?: Record<string, any>
+  signal?: AbortSignal
 }
 
 export async function apiRequest<T>(
@@ -81,6 +83,7 @@ export async function apiRequest<T>(
       body: options.body,
       query: options.params,
       headers,
+      signal: options.signal,
     })
 
     if (result.code !== 200) {

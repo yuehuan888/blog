@@ -172,11 +172,18 @@ async function handleImageSelect(e: Event) {
     uploadingStates.value.push(true)
   }
 
-  // Upload all in parallel
+  // Upload all in parallel with 30s timeout per file
+  const uploadWithTimeout = (file: File, timeoutMs = 30000): Promise<string> => {
+    const controller = new AbortController()
+    const timer = setTimeout(() => controller.abort(), timeoutMs)
+    return uploadArticleImage(file, controller.signal)
+      .finally(() => clearTimeout(timer))
+  }
+
   const results = await Promise.all(
     fileList.map((file, i) => {
       const idx = startIdx + i
-      return uploadArticleImage(file)
+      return uploadWithTimeout(file)
         .then(url => {
           uploadedImages.value[idx] = url.startsWith('http')
             ? url
@@ -184,7 +191,8 @@ async function handleImageSelect(e: Event) {
           uploadingStates.value[idx] = false
         })
         .catch(err => {
-          message.error(`上传失败: ${err.message || '未知错误'}`)
+          const msg = err.name === 'AbortError' ? '上传超时，请检查网络后重试' : (err.message || '未知错误')
+          message.error(`上传失败: ${msg}`)
           uploadedImages.value[idx] = '' // mark as failed
           uploadingStates.value[idx] = false
         })

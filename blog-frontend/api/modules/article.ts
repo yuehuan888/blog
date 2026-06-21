@@ -82,12 +82,13 @@ export function rollbackArticle(articleId: number, historyId: number) {
   return api.post<Article>(`/api/articles/${articleId}/rollback/${historyId}`)
 }
 
-export async function uploadArticleImage(file: File): Promise<string> {
+export async function uploadArticleImage(file: File, signal?: AbortSignal): Promise<string> {
   const formData = new FormData()
   formData.append('file', file)
   const result = await apiRequest<{ url: string }>('/api/upload/article-image', {
     method: 'POST',
     body: formData,
+    signal,
   })
   return result.url
 }
