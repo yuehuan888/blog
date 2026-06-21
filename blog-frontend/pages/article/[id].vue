@@ -88,6 +88,67 @@
         class="mb-6"
       />
 
+      <!-- Image Carousel -->
+      <div
+        v-if="article.images && article.images.length > 0"
+        class="relative mb-6 rounded-xl overflow-hidden bg-gray-100"
+        style="height: 360px"
+      >
+        <!-- Track -->
+        <div
+          ref="carouselTrack"
+          class="carousel-track flex overflow-x-auto snap-x snap-mandatory h-full"
+          style="scrollbar-width: none; -ms-overflow-style: none;"
+          @scroll="onCarouselScroll"
+        >
+          <div
+            v-for="(img, i) in article.images"
+            :key="i"
+            class="flex-shrink-0 w-full h-full snap-center flex items-center justify-center"
+            @click="openLightbox(i)"
+          >
+            <img
+              :src="carouselImageUrl(img)"
+              class="max-w-full max-h-full object-contain cursor-pointer"
+              :alt="`图片 ${i + 1}`"
+              loading="lazy"
+            />
+          </div>
+        </div>
+
+        <!-- Prev button -->
+        <button
+          v-if="article.images.length > 1 && currentSlide > 0"
+          class="absolute left-3 top-1/2 -translate-y-1/2 w-8 h-8 rounded-full bg-white/80 shadow flex items-center justify-center hover:bg-white transition-colors z-10"
+          @click.stop="slideTo(currentSlide - 1)"
+        >
+          <NIcon size="18"><ChevronBackOutline /></NIcon>
+        </button>
+
+        <!-- Next button -->
+        <button
+          v-if="article.images.length > 1 && currentSlide < article.images.length - 1"
+          class="absolute right-3 top-1/2 -translate-y-1/2 w-8 h-8 rounded-full bg-white/80 shadow flex items-center justify-center hover:bg-white transition-colors z-10"
+          @click.stop="slideTo(currentSlide + 1)"
+        >
+          <NIcon size="18"><ChevronForwardOutline /></NIcon>
+        </button>
+
+        <!-- Dot indicators -->
+        <div
+          v-if="article.images.length > 1"
+          class="absolute bottom-3 left-1/2 -translate-x-1/2 flex gap-1.5"
+        >
+          <span
+            v-for="(_, i) in article.images"
+            :key="i"
+            class="rounded-full transition-all duration-200"
+            :class="i === currentSlide ? 'bg-white w-4 h-2' : 'bg-white/50 w-2 h-2'"
+            :style="{ width: i === currentSlide ? '16px' : '8px', height: '8px' }"
+          />
+        </div>
+      </div>
+
       <!-- Tags -->
       <div v-if="tags.length" class="flex gap-2 mb-6 flex-wrap">
         <TagBadge v-for="tag in tags" :key="tag.id" :tag="tag" />
@@ -105,11 +166,62 @@
       </div>
     </template>
   </div>
+
+  <!-- Lightbox -->
+  <Teleport to="body">
+    <div
+      v-if="lightboxVisible"
+      class="fixed inset-0 z-50 bg-black/90 flex items-center justify-center"
+      @click="closeLightbox"
+      @keydown.escape="closeLightbox"
+    >
+      <!-- Close button -->
+      <button
+        class="absolute top-4 right-4 w-10 h-10 rounded-full bg-white/20 text-white text-xl flex items-center justify-center hover:bg-white/30 transition-colors z-20"
+        @click="closeLightbox"
+      >
+        ✕
+      </button>
+
+      <!-- Prev -->
+      <button
+        v-if="article?.images && article.images.length > 1 && lightboxIndex > 0"
+        class="absolute left-4 top-1/2 -translate-y-1/2 w-10 h-10 rounded-full bg-white/20 text-white flex items-center justify-center hover:bg-white/30 transition-colors z-20"
+        @click.stop="lightboxIndex--"
+      >
+        <NIcon size="20"><ChevronBackOutline /></NIcon>
+      </button>
+
+      <!-- Image -->
+      <img
+        :src="carouselImageUrl(article?.images?.[lightboxIndex] || '')"
+        class="max-w-[90vw] max-h-[90vh] object-contain select-none"
+        @click.stop
+      />
+
+      <!-- Next -->
+      <button
+        v-if="article?.images && article.images.length > 1 && lightboxIndex < article.images.length - 1"
+        class="absolute right-4 top-1/2 -translate-y-1/2 w-10 h-10 rounded-full bg-white/20 text-white flex items-center justify-center hover:bg-white/30 transition-colors z-20"
+        @click.stop="lightboxIndex++"
+      >
+        <NIcon size="20"><ChevronForwardOutline /></NIcon>
+      </button>
+
+      <!-- Counter -->
+      <div
+        v-if="article?.images && article.images.length > 1"
+        class="absolute bottom-6 left-1/2 -translate-x-1/2 text-white text-sm bg-black/40 px-3 py-1 rounded-full"
+      >
+        {{ lightboxIndex + 1 }} / {{ article.images.length }}
+      </div>
+    </div>
+  </Teleport>
 </template>
 
 <script setup lang="ts">
 import { NResult, NButton, NIcon, NPopconfirm, useMessage } from 'naive-ui'
-import { ArrowBackOutline, TrashOutline } from '@vicons/ionicons5'
+import { ArrowBackOutline, TrashOutline, ChevronBackOutline, ChevronForwardOutline } from '@vicons/ionicons5'
 import { getArticleById, getArticleTags, getArticleStats, deleteArticle } from '~/api/modules/article'
 import { getUserProfile, toggleFollow } from '~/api/modules/user'
 import { useAuthStore } from '~/stores/auth'
@@ -129,6 +241,45 @@ const followLoading = ref(false)
 const loading = ref(true)
 const deleting = ref(false)
 const error = ref<string | null>(null)
+
+// ========== Image Carousel ==========
+const carouselTrack = ref<HTMLElement | null>(null)
+const currentSlide = ref(0)
+const API_BASE = 'http://localhost:8080'
+
+function carouselImageUrl(src: string): string {
+  if (!src) return ''
+  if (src.startsWith('http://') || src.startsWith('https://')) return src
+  return API_BASE + src
+}
+
+function onCarouselScroll() {
+  if (!carouselTrack.value) return
+  const track = carouselTrack.value
+  const slideWidth = track.clientWidth
+  if (slideWidth === 0) return
+  currentSlide.value = Math.round(track.scrollLeft / slideWidth)
+}
+
+function slideTo(index: number) {
+  if (!carouselTrack.value) return
+  const slideWidth = carouselTrack.value.clientWidth
+  carouselTrack.value.scrollTo({ left: slideWidth * index, behavior: 'smooth' })
+  currentSlide.value = index
+}
+
+// ========== Lightbox ==========
+const lightboxVisible = ref(false)
+const lightboxIndex = ref(0)
+
+function openLightbox(index: number) {
+  lightboxIndex.value = index
+  lightboxVisible.value = true
+}
+
+function closeLightbox() {
+  lightboxVisible.value = false
+}
 
 const articleId = computed(() => Number(route.params.id))
 const canDelete = computed(() => {
@@ -226,3 +377,9 @@ watch(articleId, () => {
   fetchArticle()
 })
 </script>
+
+<style scoped>
+.carousel-track::-webkit-scrollbar {
+  display: none;
+}
+</style>
