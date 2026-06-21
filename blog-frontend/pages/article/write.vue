@@ -121,7 +121,9 @@ const authStore = useAuthStore()
 
 const formRef = ref<FormInst | null>(null)
 const saving = ref(false)
-const isEdit = ref(false)
+// 跟踪当前正在编辑的文章 ID：从路由 ?edit=id 初始化，或创建草稿后自动设置
+const editingArticleId = ref<number | null>(null)
+const isEdit = computed(() => editingArticleId.value !== null)
 
 const form = reactive({
   title: '',
@@ -223,7 +225,8 @@ const rules: FormRules = {
   ],
 }
 
-const editId = computed(() => {
+// 从路由 query 读取初始编辑 ID（仅用于 onMounted 初始化）
+const routeEditId = computed(() => {
   const id = route.query.edit
   return id ? Number(id) : null
 })
@@ -258,7 +261,11 @@ function loadDraft() {
         form.title = data.title || ''
         form.content = data.content || ''
         if (data.tagIds) selectedTagIds.value = data.tagIds
-        if (data.images) uploadedImages.value = data.images
+        if (data.images) {
+          uploadedImages.value = data.images
+          uploadingStates.value = data.images.map(() => false)
+        }
+        if (data.articleId) editingArticleId.value = data.articleId
       } catch {}
     }
   }
@@ -271,6 +278,7 @@ function saveDraftToLocal() {
       content: form.content,
       tagIds: selectedTagIds.value,
       images: uploadedImages.value.filter(u => !u.startsWith('blob:')),
+      articleId: editingArticleId.value, // 持久化编辑中的文章 ID，刷新后可恢复
     }))
   }
 }
@@ -285,8 +293,8 @@ let autoSaveTimer: ReturnType<typeof setInterval> | null = null
 
 onMounted(async () => {
   await fetchTags()
-  if (editId.value) {
-    isEdit.value = true
+  if (routeEditId.value) {
+    editingArticleId.value = routeEditId.value
     await fetchArticleForEdit()
   } else {
     loadDraft()
@@ -300,11 +308,12 @@ onUnmounted(() => {
 
 async function fetchArticleForEdit() {
   try {
-    const article = await getArticleById(editId.value!)
+    const id = editingArticleId.value!
+    const article = await getArticleById(id)
     form.title = article.title
     form.content = article.content
     // Load existing tags
-    const tags = await getArticleTags(editId.value!)
+    const tags = await getArticleTags(id)
     selectedTagIds.value = tags.map(t => t.id)
     // Restore images
     if (article.images && article.images.length > 0) {
@@ -323,7 +332,7 @@ function resetForm() {
   selectedTagIds.value = []
   uploadedImages.value = []
   uploadingStates.value = []
-  isEdit.value = false
+  editingArticleId.value = null
   clearDraft()
 }
 
@@ -342,12 +351,14 @@ async function saveArticle(status: 'draft' | 'published') {
     const category = getCategory()
     let articleId: number
 
-    if (isEdit.value && editId.value) {
-      await updateArticle(editId.value, { title: form.title, category, content: form.content, status, images: imageUrls })
-      articleId = editId.value
+    if (editingArticleId.value) {
+      await updateArticle(editingArticleId.value, { title: form.title, category, content: form.content, status, images: imageUrls })
+      articleId = editingArticleId.value
     } else {
       const article = await createArticle({ title: form.title, category, content: form.content, status, images: imageUrls })
       articleId = article.id
+      // 创建成功后立即进入编辑模式，后续保存走更新逻辑
+      editingArticleId.value = article.id
     }
 
     // Assign tags
