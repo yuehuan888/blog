@@ -9,8 +9,10 @@ import com.blog.dto.ArticleQueryDTO;
 import com.blog.entity.Article;
 import com.blog.entity.ArticleHistory;
 import com.blog.entity.ArticleRead;
+import com.blog.entity.ArticleImage;
 import com.blog.entity.ArticleTag;
 import com.blog.mapper.*;
+import com.blog.mapper.ArticleImageMapper;
 import com.blog.service.ArticleService;
 import com.blog.util.AuthContext;
 import java.util.Objects;
@@ -20,16 +22,21 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.amqp.rabbit.core.RabbitTemplate;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.io.File;
 import java.io.Serializable;
 import java.time.Duration;
 import java.time.LocalDateTime;
 import java.util.Collection;
+import java.util.Collections;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.stream.Collectors;
 
 @Service
 public class ArticleServiceImpl extends ServiceImpl<ArticleMapper, Article> implements ArticleService {
@@ -65,6 +72,12 @@ public class ArticleServiceImpl extends ServiceImpl<ArticleMapper, Article> impl
     @Autowired
     private TagMapper tagMapper;
 
+    @Autowired
+    private ArticleImageMapper articleImageMapper;
+
+    @Value("${app.upload.dir:uploads}")
+    private String uploadDir;
+
     @Autowired(required = false)
     private StringRedisTemplate redisTemplate;
 
@@ -95,6 +108,19 @@ public class ArticleServiceImpl extends ServiceImpl<ArticleMapper, Article> impl
             throw new RuntimeException("Article not found: " + id);
         }
 
+        // Populate images
+        List<ArticleImage> articleImages = articleImageMapper.selectByArticleId((Long) id);
+        if (!articleImages.isEmpty()) {
+            article.setImages(articleImages.stream()
+                    .map(ArticleImage::getUrl)
+                    .collect(Collectors.toList()));
+            article.setCoverImage(articleImages.get(0).getUrl());
+            article.setImageCount(articleImages.size());
+        } else {
+            article.setImages(Collections.emptyList());
+            article.setImageCount(0);
+        }
+
         setCache(key, article);
         return article;
     }
@@ -103,6 +129,18 @@ public class ArticleServiceImpl extends ServiceImpl<ArticleMapper, Article> impl
     @Transactional
     public boolean save(Article entity) {
         boolean result = super.save(entity);
+
+        // Save images if provided
+        if (entity.getImages() != null && !entity.getImages().isEmpty()) {
+            for (int i = 0; i < entity.getImages().size(); i++) {
+                ArticleImage img = new ArticleImage();
+                img.setArticleId(entity.getId());
+                img.setUrl(entity.getImages().get(i));
+                img.setSortOrder(i);
+                articleImageMapper.insert(img);
+            }
+        }
+
         deleteCache(CACHE_CATEGORY_STATS);
         deleteTagCloudCache();
         sendEvent("created", entity);
@@ -113,6 +151,31 @@ public class ArticleServiceImpl extends ServiceImpl<ArticleMapper, Article> impl
     @Transactional
     public boolean updateById(Article entity) {
         Article old = getById(entity.getId());
+
+        // Update images if provided
+        if (entity.getImages() != null) {
+            // Delete old images and files
+            List<ArticleImage> oldImages = articleImageMapper.selectByArticleId(entity.getId());
+            for (ArticleImage oldImg : oldImages) {
+                try {
+                    File file = new File(uploadDir, oldImg.getUrl().replace("/uploads/", ""));
+                    if (file.exists()) file.delete();
+                } catch (Exception e) {
+                    log.warn("Failed to delete image file: {}", oldImg.getUrl(), e);
+                }
+            }
+            articleImageMapper.deleteByArticleId(entity.getId());
+
+            // Insert new images
+            for (int i = 0; i < entity.getImages().size(); i++) {
+                ArticleImage img = new ArticleImage();
+                img.setArticleId(entity.getId());
+                img.setUrl(entity.getImages().get(i));
+                img.setSortOrder(i);
+                articleImageMapper.insert(img);
+            }
+        }
+
         saveHistoryIfNeeded(old, entity);
         boolean result = super.updateById(entity);
         deleteCache(CACHE_ARTICLE + entity.getId());
@@ -168,6 +231,18 @@ public class ArticleServiceImpl extends ServiceImpl<ArticleMapper, Article> impl
         articleHistoryMapper.delete(new LambdaQueryWrapper<ArticleHistory>()
                 .eq(ArticleHistory::getArticleId, articleId));
 
+        // 6.5. Clean up article images
+        List<ArticleImage> articleImages = articleImageMapper.selectByArticleId(articleId);
+        for (ArticleImage img : articleImages) {
+            try {
+                File file = new File(uploadDir, img.getUrl().replace("/uploads/", ""));
+                if (file.exists()) file.delete();
+            } catch (Exception e) {
+                log.warn("Failed to delete image file: {}", img.getUrl(), e);
+            }
+        }
+        articleImageMapper.deleteByArticleId(articleId);
+
         // 7. Delete the article itself
         boolean result = super.removeById(articleId);
 
@@ -197,12 +272,26 @@ public class ArticleServiceImpl extends ServiceImpl<ArticleMapper, Article> impl
             Page<Article> page = new Page<>(query.getPage(), query.getSize());
             String tagStatus = query.getStatus() != null && !query.getStatus().isBlank()
                     ? query.getStatus() : Article.STATUS_PUBLISHED;
-            return baseMapper.selectByTagId(page,
+            IPage<Article> result = baseMapper.selectByTagId(page,
                     query.getTagId(),
                     query.getCategory(),
                     tagStatus,
                     query.getKeyword(),
                     query.getAuthorId());
+
+            // Batch load coverImage and imageCount
+            List<Article> records = result.getRecords();
+            if (!records.isEmpty()) {
+                List<Long> ids = records.stream().map(Article::getId).collect(Collectors.toList());
+                Map<Long, String> coverMap = batchCoverMap(ids);
+                Map<Long, Integer> countMap = batchCountMap(ids);
+                for (Article a : records) {
+                    a.setCoverImage(coverMap.get(a.getId()));
+                    a.setImageCount(countMap.getOrDefault(a.getId(), 0));
+                    a.setImages(Collections.emptyList());
+                }
+            }
+            return result;
         }
 
         LambdaQueryWrapper<Article> wrapper = new LambdaQueryWrapper<>();
@@ -227,7 +316,21 @@ public class ArticleServiceImpl extends ServiceImpl<ArticleMapper, Article> impl
         wrapper.orderByDesc(Article::getCreatedAt);
 
         Page<Article> page = new Page<>(query.getPage(), query.getSize());
-        return baseMapper.selectPage(page, wrapper);
+        IPage<Article> result = baseMapper.selectPage(page, wrapper);
+
+        // Batch load coverImage and imageCount
+        List<Article> records = result.getRecords();
+        if (!records.isEmpty()) {
+            List<Long> ids = records.stream().map(Article::getId).collect(Collectors.toList());
+            Map<Long, String> coverMap = batchCoverMap(ids);
+            Map<Long, Integer> countMap = batchCountMap(ids);
+            for (Article a : records) {
+                a.setCoverImage(coverMap.get(a.getId()));
+                a.setImageCount(countMap.getOrDefault(a.getId(), 0));
+                a.setImages(Collections.emptyList());
+            }
+        }
+        return result;
     }
 
     @Override
@@ -393,5 +496,26 @@ public class ArticleServiceImpl extends ServiceImpl<ArticleMapper, Article> impl
         } catch (Exception e) {
             log.error("Failed to send RabbitMQ event: type={}, articleId={}", type, article.getId(), e);
         }
+    }
+
+    // ==================== 图片批量加载 ====================
+
+    private Map<Long, String> batchCoverMap(List<Long> articleIds) {
+        List<ArticleImage> coverImages = articleImageMapper.selectCoverImages(articleIds);
+        Map<Long, String> map = new HashMap<>();
+        for (ArticleImage img : coverImages) {
+            map.put(img.getArticleId(), img.getUrl());
+        }
+        return map;
+    }
+
+    private Map<Long, Integer> batchCountMap(List<Long> articleIds) {
+        List<Map<String, Object>> rows = articleImageMapper.countByArticleIds(articleIds);
+        Map<Long, Integer> map = new HashMap<>();
+        for (Map<String, Object> row : rows) {
+            map.put(((Number) row.get("article_id")).longValue(),
+                    ((Number) row.get("cnt")).intValue());
+        }
+        return map;
     }
 }

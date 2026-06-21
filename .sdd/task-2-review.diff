@@ -1,0 +1,66 @@
+diff --git a/blog-backend/src/main/java/com/blog/entity/ArticleImage.java b/blog-backend/src/main/java/com/blog/entity/ArticleImage.java
+new file mode 100644
+index 0000000..90ac4c1
+--- /dev/null
++++ b/blog-backend/src/main/java/com/blog/entity/ArticleImage.java
+@@ -0,0 +1,23 @@
++package com.blog.entity;
++
++import com.baomidou.mybatisplus.annotation.*;
++import lombok.Data;
++
++import java.time.LocalDateTime;
++
++@Data
++@TableName("article_image")
++public class ArticleImage {
++
++    @TableId(type = IdType.AUTO)
++    private Long id;
++
++    private Long articleId;
++
++    private String url;
++
++    private Integer sortOrder;
++
++    @TableField(fill = FieldFill.INSERT)
++    private LocalDateTime createdAt;
++}
+diff --git a/blog-backend/src/main/java/com/blog/mapper/ArticleImageMapper.java b/blog-backend/src/main/java/com/blog/mapper/ArticleImageMapper.java
+new file mode 100644
+index 0000000..a8a59c1
+--- /dev/null
++++ b/blog-backend/src/main/java/com/blog/mapper/ArticleImageMapper.java
+@@ -0,0 +1,31 @@
++package com.blog.mapper;
++
++import com.baomidou.mybatisplus.core.mapper.BaseMapper;
++import com.blog.entity.ArticleImage;
++import org.apache.ibatis.annotations.Delete;
++import org.apache.ibatis.annotations.Mapper;
++import org.apache.ibatis.annotations.Param;
++import org.apache.ibatis.annotations.Select;
++
++import java.util.List;
++import java.util.Map;
++
++@Mapper
++public interface ArticleImageMapper extends BaseMapper<ArticleImage> {
++
++    @Delete("DELETE FROM article_image WHERE article_id = #{articleId}")
++    int deleteByArticleId(@Param("articleId") Long articleId);
++
++    @Select("SELECT * FROM article_image WHERE article_id = #{articleId} ORDER BY sort_order")
++    List<ArticleImage> selectByArticleId(@Param("articleId") Long articleId);
++
++    @Select("<script>SELECT article_id, COUNT(*) AS cnt FROM article_image WHERE article_id IN " +
++            "<foreach item='id' collection='ids' open='(' separator=',' close=')'>#{id}</foreach> " +
++            "GROUP BY article_id</script>")
++    List<Map<String, Object>> countByArticleIds(@Param("ids") List<Long> articleIds);
++
++    @Select("<script>SELECT * FROM article_image WHERE article_id IN " +
++            "<foreach item='id' collection='ids' open='(' separator=',' close=')'>#{id}</foreach> " +
++            "AND sort_order = 0</script>")
++    List<ArticleImage> selectCoverImages(@Param("ids") List<Long> articleIds);
++}

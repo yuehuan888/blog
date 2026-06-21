@@ -22,7 +22,19 @@
       "Bash(echo \"EXIT CODE: $?\")",
       "Bash(curl -s http://localhost:8080/api/articles?page=1\\\\&size=5)",
       "Bash(curl *)",
-      "Bash(redis-cli ping *)"
+      "Bash(redis-cli ping *)",
+      "Bash(mysqladmin -u root -p123456 ping)",
+      "Bash(mysql *)",
+      "Read(//d/redis//**)",
+      "Bash(/d/redis/redis-server.exe --daemonize yes)",
+      "Bash(python3 -m json.tool)",
+      "Bash(node -e ' *)",
+      "Bash(python3 -c \"import sys,json; d=json.loads\\(sys.stdin.read\\(\\).split\\('id=\\\\\"__NUXT_DATA__\\\\\"'\\)[1].split\\('</script>'\\)[0]\\) if '__NUXT_DATA__' in sys.stdin.read\\(\\) else print\\('no data'\\)\")",
+      "Bash(grep -o '\\\\\"\\\\\\\\/tag[^\\\\\"]*\\\\\"')",
+      "Bash(python3 -c \"import sys,json; data=json.load\\(sys.stdin\\); print\\(json.dumps\\([t for t in data['data'] if t['id']==7], ensure_ascii=False\\)\\)\")",
+      "Bash(grep -oP '.{0,100}\\(skeleton|EmptyState|bubble|标签云|🏷\\).{0,100}')",
+      "Read(//tmp/**)",
+      "Bash(python3 -c \"import sys,json; d=json.load\\(sys.stdin\\); print\\(f'total={d[\\\\\"data\\\\\"][\\\\\"total\\\\\"]}, records={len\\(d[\\\\\"data\\\\\"][\\\\\"records\\\\\"]\\)}'\\)\")"
     ]
   }
 }

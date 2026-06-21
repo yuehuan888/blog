@@ -4,6 +4,7 @@ import com.baomidou.mybatisplus.annotation.*;
 import lombok.Data;
 
 import java.time.LocalDateTime;
+import java.util.List;
 
 @Data
 @TableName("article")
@@ -35,6 +36,15 @@ public class Article {
 
     @TableField(fill = FieldFill.INSERT_UPDATE)
     private LocalDateTime updatedAt;
+
+    @TableField(exist = false)
+    private String coverImage;
+
+    @TableField(exist = false)
+    private List<String> images;
+
+    @TableField(exist = false)
+    private Integer imageCount;
 
     public static final String STATUS_DRAFT = "draft";
     public static final String STATUS_PUBLISHED = "published";
