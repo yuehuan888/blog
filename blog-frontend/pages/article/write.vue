@@ -328,6 +328,7 @@ async function fetchArticleForEdit() {
       uploadedImages.value = article.images.map((u: string) =>
         u.startsWith('http') ? u : `http://localhost:8080${u}`
       )
+      uploadingStates.value = article.images.map(() => false)
     }
   } catch (err: any) {
     message.error('加载文章失败')
