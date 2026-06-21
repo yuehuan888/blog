@@ -154,34 +154,41 @@ async function handleImageSelect(e: Event) {
     return
   }
 
-  for (let i = 0; i < files.length; i++) {
-    const file = files[i]
+  // Validate size first
+  const overSize = Array.from(files).filter(f => f.size > 5 * 1024 * 1024)
+  if (overSize.length > 0) {
+    message.warning(`图片 "${overSize.map(f => f.name).join(', ')}" 超过 5MB 限制`)
+    input.value = ''
+    return
+  }
 
-    if (file.size > 5 * 1024 * 1024) {
-      message.warning(`图片 "${file.name}" 超过 5MB 限制`)
-      continue
-    }
-
-    const idx = uploadedImages.value.length
-    uploadedImages.value.push('')
+  // Reserve slots and show local preview immediately
+  const startIdx = uploadedImages.value.length
+  const fileList = Array.from(files)
+  for (const file of fileList) {
+    uploadedImages.value.push(URL.createObjectURL(file))
     uploadingStates.value.push(true)
+  }
 
-    try {
-      const localUrl = URL.createObjectURL(file)
-      uploadedImages.value[idx] = localUrl
+  // Upload all in parallel
+  const results = await Promise.allSettled(
+    fileList.map((file, i) => {
+      return uploadArticleImage(file).then(url => {
+        return { index: startIdx + i, url }
+      })
+    })
+  )
 
-      const url = await uploadArticleImage(file)
-      uploadedImages.value[idx] = url.startsWith('http')
+  for (const result of results) {
+    if (result.status === 'fulfilled') {
+      const { index, url } = result.value as { index: number; url: string }
+      uploadedImages.value[index] = url.startsWith('http')
         ? url
         : `http://localhost:8080${url}`
-    } catch (err: any) {
-      message.error(`上传 "${file.name}" 失败: ${err.message || '未知错误'}`)
-      uploadedImages.value.splice(idx, 1)
-      uploadingStates.value.splice(idx, 1)
-    } finally {
-      if (idx < uploadingStates.value.length) {
-        uploadingStates.value[idx] = false
-      }
+      uploadingStates.value[index] = false
+    } else {
+      const err = (result as PromiseRejectedResult).reason
+      message.error(`上传失败: ${err.message || '未知错误'}`)
     }
   }
 
@@ -305,6 +312,16 @@ async function fetchArticleForEdit() {
   }
 }
 
+function resetForm() {
+  form.title = ''
+  form.content = ''
+  selectedTagIds.value = []
+  uploadedImages.value = []
+  uploadingStates.value = []
+  isEdit.value = false
+  clearDraft()
+}
+
 async function saveArticle(status: 'draft' | 'published') {
   saving.value = true
   try {
@@ -335,13 +352,12 @@ async function saveArticle(status: 'draft' | 'published') {
 
     if (status === 'draft') {
       message.success('草稿已保存到服务器')
+      saveDraftToLocal()
     } else {
-      clearDraft()
+      resetForm()
       message.success('文章发布成功！')
       router.push(`/article/${articleId}`)
     }
-
-    saveDraftToLocal()
   } catch (err: any) {
     message.error(err.message || '操作失败')
   } finally {
