@@ -117,20 +117,21 @@ npm run dev
 
 ### 首页瀑布流布局（2026-06-21 改）
 
-- 卡片布局从固定 CSS Grid 改为 JS Masonry 瀑布流
+- 手管四列 Flex 瀑布流：每列是独立 `flex flex-col` 容器，浏览器原生布局无高度估算
+- 卡片按 count 最矮列分配，入列后**永不换列**，无限滚动追加时已有卡片位置不变
 - 列数响应式：2 列（<640px）/ 3 列（640-1024px）/ 4 列（≥1024px）
-- 每张卡片放入当前最矮列，自然错落
-- 切换标签时重算布局，resize 时自适应列数
+- 切换标签时重新均分全部卡片，resize 时重新分配列数
 
 ### 文章图片系统（2026-06-21 新增）
 
 - 每篇文章最多 9 张图片，独立存储于 `article_image` 表
-- `POST /api/upload/article-image`：免鉴权上传端点，单张 ≤ 5MB，存入 `uploads/articles/`
+- `POST /api/upload/article-image`：免鉴权上传端点，单张 ≤ 5MB，存入 `uploads/articles/`；前端 `api/index.ts` 显式 `import { $fetch } from 'ofetch'`（避免 Nuxt 自动导入解析失败），`apiRequest` 支持 `AbortSignal` 透传实现超时控制
 - 文章列表 API 返回 `coverImage`（首图）和 `imageCount`（总图数）
 - 文章详情 API 返回 `images: string[]`（全部图片 URL，按 sort_order 排序）
 - ArticleCard：有图显示封面 + 右下角 +N 角标，无图回退为 emoji 占位
-- 文章详情页：标题下方 CSS scroll-snap 横向轮播（360px），点击图片弹出全屏灯箱
-- 写文章页：标题下方即时上传区，支持多选、删除，草稿保留已上传图片
+- 文章详情页：**左右两栏布局**——左侧 35% 黑底/浅绿底垂直排列全尺寸图片（点击弹出灯箱），右侧 65% 滚动文章内容；无图文章保持居中单栏；移动端上下堆叠
+- 写文章页：标题下方即时上传区，支持多选、并行上传、30s 超时，草稿保留已上传图片
+- `editingArticleId` ref 追踪编辑中的文章：`createArticle` 成功后自动设置，后续保存走 `updateArticle`；localStorage 持久化 `articleId` 支持刷新恢复；`updateArticle` 遇"文章不存在"自动回退 `createArticle`
 - 级联删除：文章删除时清理 `article_image` 记录 + 服务器文件
 - `ImageCleanupScheduler`：每天 3:00 清理 24h+ 未关联的孤儿图片文件
 - `spring.servlet.multipart.max-file-size` 已提升至 5MB（适配文章图片上传）
