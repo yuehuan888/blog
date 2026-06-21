@@ -42,13 +42,14 @@
       </NuxtLink>
     </div>
 
-    <!-- Article Waterfall Grid -->
+    <!-- Skeleton Loading -->
     <div v-if="loading" class="columns-2 md:columns-3 lg:columns-4 gap-5">
       <div v-for="i in 8" :key="i" class="break-inside-avoid mb-5">
         <div class="skeleton rounded-card" :style="{ height: (140 + (i % 3) * 40) + 'px' }" />
       </div>
     </div>
 
+    <!-- Error -->
     <div v-else-if="error" class="flex flex-col items-center py-20">
       <NResult status="error" title="加载失败" :description="error">
         <template #footer>
@@ -57,6 +58,7 @@
       </NResult>
     </div>
 
+    <!-- Empty -->
     <div v-else-if="articles.length === 0" class="py-20">
       <EmptyState
         description="还没有文章，成为第一个创作者吧～"
@@ -65,18 +67,21 @@
       />
     </div>
 
+    <!-- JS Masonry Waterfall -->
     <template v-else>
-      <div class="columns-2 md:columns-3 lg:columns-4 gap-5">
+      <div ref="masonryContainer" class="relative" :style="{ height: containerHeight + 'px' }">
         <div
-          v-for="article in articles"
+          v-for="(article, index) in articles"
           :key="article.id"
-          class="break-inside-avoid mb-5"
+          data-card
+          class="absolute transition-all duration-300 ease-out"
+          :style="cardStyle(index)"
         >
           <ArticleCard :article="article" />
         </div>
       </div>
 
-      <!-- 滚动加载指示器 -->
+      <!-- Loading more spinner -->
       <div v-if="loadingMore" class="flex justify-center py-8">
         <NSpin size="small" />
       </div>
@@ -85,12 +90,8 @@
         — 已经到底了 —
       </p>
 
-      <!-- IntersectionObserver 哨兵 -->
-      <div
-        v-if="hasMore && !loadingMore"
-        ref="sentinelRef"
-        class="h-1"
-      />
+      <!-- IntersectionObserver sentinel -->
+      <div v-if="hasMore && !loadingMore" ref="sentinelRef" class="h-1" />
     </template>
   </div>
 </template>
@@ -112,18 +113,118 @@ const currentPage = ref(1)
 const hasMore = ref(true)
 const pageSize = 12
 const sentinelRef = ref<HTMLElement | null>(null)
+const masonryContainer = ref<HTMLElement | null>(null)
 
+// ========== Masonry Layout ==========
+const columnCount = ref(4)
+const gap = 20
+const columnHeights = ref<number[]>([])
+const containerWidth = ref(0)
+const cardWidth = ref(0)
+const containerHeight = ref(0)
+const cardPositions = ref<{ left: number; top: number; width: number; height: number }[]>([])
+let resizeObserver: ResizeObserver | null = null
+
+function getColumnCount() {
+  if (typeof window === 'undefined') return 4
+  const w = window.innerWidth
+  if (w < 640) return 2
+  if (w < 1024) return 3
+  return 4
+}
+
+function cardStyle(index: number) {
+  const pos = cardPositions.value[index]
+  if (!pos) return { visibility: 'hidden' as const }
+  return {
+    left: pos.left + 'px',
+    top: pos.top + 'px',
+    width: pos.width + 'px',
+  }
+}
+
+async function layoutCards(startIndex = 0) {
+  if (!masonryContainer.value) return
+
+  // Initialize column heights and container width on first layout
+  if (startIndex === 0) {
+    columnCount.value = getColumnCount()
+    containerWidth.value = masonryContainer.value.clientWidth
+    cardWidth.value = (containerWidth.value - gap * (columnCount.value - 1)) / columnCount.value
+    columnHeights.value = new Array(columnCount.value).fill(0)
+    cardPositions.value = new Array(articles.value.length)
+  }
+
+  // Layout each card starting from startIndex
+  for (let i = startIndex; i < articles.value.length; i++) {
+    // Find shortest column
+    const col = columnHeights.value.indexOf(Math.min(...columnHeights.value))
+    const left = col * (cardWidth.value + gap)
+    const top = columnHeights.value[col]
+
+    cardPositions.value[i] = {
+      left,
+      top,
+      width: cardWidth.value,
+      height: 0, // will be updated by ResizeObserver
+    }
+
+    // Estimate height based on content (will be refined by ResizeObserver)
+    const estimatedHeight = estimateCardHeight(articles.value[i])
+    columnHeights.value[col] += estimatedHeight + gap
+  }
+
+  containerHeight.value = Math.max(...columnHeights.value, 100)
+}
+
+function estimateCardHeight(article: Article): number {
+  // Rough estimate: base + image area + text
+  let h = 120 // padding + meta + title
+  if (article.coverImage) {
+    h += cardWidth.value * 0.75 // image at ~4:3 ratio
+  }
+  if (article.content) {
+    h += Math.min(article.content.length / 3, 60)
+  }
+  return h
+}
+
+function measureRealHeights() {
+  if (!masonryContainer.value) return
+
+  const cardEls = masonryContainer.value.querySelectorAll<HTMLElement>('[data-card]')
+  cardEls.forEach((el, i) => {
+    if (i < cardPositions.value.length && cardPositions.value[i]) {
+      cardPositions.value[i].height = el.offsetHeight
+    }
+  })
+}
+
+// Re-layout on window resize (debounced)
+let resizeTimer: ReturnType<typeof setTimeout> | null = null
+function onResize() {
+  if (resizeTimer) clearTimeout(resizeTimer)
+  resizeTimer = setTimeout(() => {
+    const newColCount = getColumnCount()
+    if (newColCount !== columnCount.value && articles.value.length > 0) {
+      columnCount.value = newColCount
+      layoutCards(0)
+      nextTick(() => measureRealHeights())
+    }
+  }, 200)
+}
+
+// ========== Data Fetching ==========
 async function fetchHotArticles() {
   try {
     const result = await getHotArticles()
     hotArticles.value = result.records || []
   } catch {
-    // Non-critical, silently fail
+    // Non-critical
   }
 }
 
 async function fetchArticles(page = 1) {
-  // 首次加载显示全屏骨架，追加加载不替换 DOM
   if (page === 1) {
     loading.value = true
     error.value = null
@@ -147,6 +248,16 @@ async function fetchArticles(page = 1) {
     }
     currentPage.value = page
     hasMore.value = result.records && result.records.length === pageSize
+
+    // Layout cards after DOM update
+    await nextTick()
+    if (page === 1) {
+      layoutCards(0)
+    } else {
+      layoutCards(articles.value.length - (result.records?.length || 0))
+    }
+    await nextTick()
+    measureRealHeights()
   } catch (err: any) {
     if (page === 1) {
       error.value = err.message || '加载文章失败'
@@ -171,8 +282,7 @@ async function fetchTags() {
   }
 }
 
-// ========== 无限滚动 ==========
-
+// ========== Lifecycle ==========
 let observer: IntersectionObserver | null = null
 
 function setupObserver() {
@@ -185,19 +295,17 @@ function setupObserver() {
         loadMore()
       }
     },
-    { rootMargin: '200px' }, // 提前 200px 触发，用户无感知
+    { rootMargin: '200px' },
   )
   observer.observe(sentinelRef.value)
 }
 
-// 每次 articles 更新后或切换标签后重新挂载哨兵
 watch([() => articles.value.length, activeTagId], () => {
   nextTick(() => {
     setupObserver()
   })
 })
 
-// 切换标签时重置列表
 watch(activeTagId, () => {
   currentPage.value = 1
   hasMore.value = true
@@ -208,9 +316,39 @@ onMounted(() => {
   fetchHotArticles()
   fetchTags()
   fetchArticles()
+  window.addEventListener('resize', onResize)
+
+  // Set up ResizeObserver on the container to catch image loads
+  nextTick(() => {
+    if (masonryContainer.value) {
+      resizeObserver = new ResizeObserver(() => {
+        measureRealHeights()
+        // Recalculate column heights based on real measurements
+        recalcColumnHeights()
+      })
+      resizeObserver.observe(masonryContainer.value)
+    }
+  })
 })
 
 onUnmounted(() => {
   observer?.disconnect()
+  resizeObserver?.disconnect()
+  window.removeEventListener('resize', onResize)
+  if (resizeTimer) clearTimeout(resizeTimer)
 })
+
+function recalcColumnHeights() {
+  // Recalculate container height from actual card bottoms (handles image loads)
+  let maxBottom = 100
+  for (let i = 0; i < cardPositions.value.length; i++) {
+    const pos = cardPositions.value[i]
+    if (!pos) continue
+    const bottom = pos.top + pos.height + gap
+    if (bottom > maxBottom) maxBottom = bottom
+  }
+  if (maxBottom !== containerHeight.value) {
+    containerHeight.value = maxBottom
+  }
+}
 </script>

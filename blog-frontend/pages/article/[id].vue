@@ -27,17 +27,17 @@
   >
     <!-- Left: Image Column -->
     <div
-      class="lg:w-[35%] lg:flex-shrink-0 bg-black overflow-y-auto flex flex-col items-center"
-      style="scrollbar-width: none; -ms-overflow-style: none;"
+      class="lg:w-[35%] lg:flex-shrink-0 overflow-y-auto flex flex-col items-center"
+      style="scrollbar-width: none; -ms-overflow-style: none; background-color: #F0F7F4;"
     >
-      <div class="sticky top-0 z-10 w-full flex items-center justify-between px-4 py-3 bg-gradient-to-b from-black/80 to-transparent">
-        <NButton text size="small" @click="router.back()" class="!text-white">
+      <div class="sticky top-0 z-10 w-full flex items-center justify-between px-4 py-3" style="background: linear-gradient(to bottom, rgba(240,247,244,0.95), rgba(240,247,244,0));">
+        <NButton text size="small" @click="router.back()" class="!text-[#2D6A4F]">
           <template #icon>
             <NIcon size="18"><ArrowBackOutline /></NIcon>
           </template>
           返回
         </NButton>
-        <span v-if="article.images.length > 1" class="text-white/70 text-sm">
+        <span v-if="article.images.length > 1" class="text-text-secondary text-sm">
           {{ article.images.length }} 张图片
         </span>
       </div>
