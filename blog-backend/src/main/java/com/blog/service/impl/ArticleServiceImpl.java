@@ -34,8 +34,10 @@ import java.time.LocalDateTime;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.stream.Collectors;
 
 @Service
@@ -154,14 +156,18 @@ public class ArticleServiceImpl extends ServiceImpl<ArticleMapper, Article> impl
 
         // Update images if provided
         if (entity.getImages() != null) {
-            // Delete old images and files
             List<ArticleImage> oldImages = articleImageMapper.selectByArticleId(entity.getId());
+            Set<String> newUrls = new HashSet<>(entity.getImages());
+
+            // Only delete files that are NOT in the new image list
             for (ArticleImage oldImg : oldImages) {
-                try {
-                    File file = new File(uploadDir, oldImg.getUrl().replace("/uploads/", ""));
-                    if (file.exists()) file.delete();
-                } catch (Exception e) {
-                    log.warn("Failed to delete image file: {}", oldImg.getUrl(), e);
+                if (!newUrls.contains(oldImg.getUrl())) {
+                    try {
+                        File file = new File(uploadDir, oldImg.getUrl().replace("/uploads/", ""));
+                        if (file.exists()) file.delete();
+                    } catch (Exception e) {
+                        log.warn("Failed to delete image file: {}", oldImg.getUrl(), e);
+                    }
                 }
             }
             articleImageMapper.deleteByArticleId(entity.getId());
