@@ -1,0 +1,1215 @@
+diff --git a/blog-backend/CLAUDE.md b/blog-backend/CLAUDE.md
+index e0841bc..aa735c8 100644
+--- a/blog-backend/CLAUDE.md
++++ b/blog-backend/CLAUDE.md
+@@ -127,16 +127,17 @@ com.blog
+ 
+ `ArticleServiceImpl.removeById()` 删除文章时**完整清理所有关联数据**：
+ 
+-1. 删除 article_tag 关联 + 更新 tag.article_count
+-2. 删除 article_like 全部记录
+-3. 删除 article_favorite 全部记录
+-4. 删除 article_read 全部记录
+-5. 删除 comment_like（通过 commentId）+ 删除 comment
+-6. 删除 article_history 全部记录
+-7. 删除 article 本身
+-8. 清理 Redis：article 缓存、like/favorite Set、hot ZSET、categoryStats、tag cloud
+-
+-新增 Mapper 方法：`ArticleLikeMapper.deleteByArticleId`、`ArticleFavoriteMapper.deleteByArticleId`、`CommentMapper.deleteByArticleId`/`selectIdsByArticleId`、`CommentLikeMapper.deleteByCommentIds`
++1. 删除 article_image 记录 + 服务器图片文件
++2. 删除 article_tag 关联 + 更新 tag.article_count
++3. 删除 article_like 全部记录
++4. 删除 article_favorite 全部记录
++5. 删除 article_read 全部记录
++6. 删除 comment_like（通过 commentId）+ 删除 comment
++7. 删除 article_history 全部记录
++8. 删除 article 本身
++9. 清理 Redis：article 缓存、like/favorite Set、hot ZSET、categoryStats、tag cloud
++
++新增 Mapper 方法：`ArticleImageMapper.deleteByArticleId`/`selectByArticleId`、`ArticleLikeMapper.deleteByArticleId`、`ArticleFavoriteMapper.deleteByArticleId`、`CommentMapper.deleteByArticleId`/`selectIdsByArticleId`、`CommentLikeMapper.deleteByCommentIds`
+ 
+ ## 查询参数
+ 
+@@ -200,6 +201,7 @@ com.blog
+ | GET | `/api/users/{id}/followers?page=&size=` | 粉丝列表 |
+ | GET | `/api/users/{id}/following?page=&size=` | 关注列表 |
+ | POST | `/api/upload/avatar` | 上传头像（免鉴权，max 2MB） |
++| POST | `/api/upload/article-image` | 上传文章配图（免鉴权，max 5MB） |
+ 
+ ## Redis Key 设计总览
+ 
+@@ -332,6 +334,7 @@ com.blog
+ | `tag` | 标签主表 | UNIQUE(name), article_count, hot_score |
+ | `article_tag` | 文章-标签多对多 | UNIQUE(article_id, tag_id) |
+ | `article_history` | 文章版本历史 | INDEX(article_id, version_no), change_type |
++| `article_image` | 文章配图 | INDEX(article_id), url + sort_order 排序 |
+ | `comment` | 评论 | parent_id/reply_to 嵌套，status 状态控制，INDEX(article_id, parent_id) |
+ | `comment_like` | 评论点赞 | UNIQUE(comment_id, user_id) |
+ | `user` | 用户表 | UNIQUE(username), nickname, avatar, role 区分 admin/user |
+diff --git a/blog-backend/src/main/java/com/blog/controller/UploadController.java b/blog-backend/src/main/java/com/blog/controller/UploadController.java
+index 50e55ce..64dacbf 100644
+--- a/blog-backend/src/main/java/com/blog/controller/UploadController.java
++++ b/blog-backend/src/main/java/com/blog/controller/UploadController.java
+@@ -55,4 +55,40 @@ public class UploadController {
+             return Result.fail(500, "Failed to save file: " + e.getMessage());
+         }
+     }
++
++    @PostMapping("/upload/article-image")
++    public Result<Map<String, String>> uploadArticleImage(@RequestParam("file") MultipartFile file) {
++        if (file.isEmpty()) {
++            return Result.fail(400, "File is empty");
++        }
++
++        String contentType = file.getContentType();
++        if (contentType == null || !contentType.startsWith("image/")) {
++            return Result.fail(400, "Only image files are allowed");
++        }
++
++        if (file.getSize() > 5 * 1024 * 1024) {
++            return Result.fail(400, "File size must be less than 5MB");
++        }
++
++        try {
++            Path articleDir = Paths.get(uploadDir, "articles");
++            Files.createDirectories(articleDir);
++
++            String originalName = file.getOriginalFilename();
++            String ext = "";
++            if (originalName != null && originalName.contains(".")) {
++                ext = originalName.substring(originalName.lastIndexOf("."));
++            }
++            String filename = "article_" + UUID.randomUUID().toString().substring(0, 8) + ext;
++
++            Path filePath = articleDir.resolve(filename);
++            file.transferTo(filePath.toFile());
++
++            String url = "/uploads/articles/" + filename;
++            return Result.ok(Map.of("url", url));
++        } catch (IOException e) {
++            return Result.fail(500, "Failed to save file: " + e.getMessage());
++        }
++    }
+ }
+diff --git a/blog-backend/src/main/java/com/blog/entity/Article.java b/blog-backend/src/main/java/com/blog/entity/Article.java
+index 3298d50..1f21ad6 100644
+--- a/blog-backend/src/main/java/com/blog/entity/Article.java
++++ b/blog-backend/src/main/java/com/blog/entity/Article.java
+@@ -4,6 +4,7 @@ import com.baomidou.mybatisplus.annotation.*;
+ import lombok.Data;
+ 
+ import java.time.LocalDateTime;
++import java.util.List;
+ 
+ @Data
+ @TableName("article")
+@@ -36,6 +37,15 @@ public class Article {
+     @TableField(fill = FieldFill.INSERT_UPDATE)
+     private LocalDateTime updatedAt;
+ 
++    @TableField(exist = false)
++    private String coverImage;
++
++    @TableField(exist = false)
++    private List<String> images;
++
++    @TableField(exist = false)
++    private Integer imageCount;
++
+     public static final String STATUS_DRAFT = "draft";
+     public static final String STATUS_PUBLISHED = "published";
+ }
+diff --git a/blog-backend/src/main/java/com/blog/entity/ArticleImage.java b/blog-backend/src/main/java/com/blog/entity/ArticleImage.java
+new file mode 100644
+index 0000000..90ac4c1
+--- /dev/null
++++ b/blog-backend/src/main/java/com/blog/entity/ArticleImage.java
+@@ -0,0 +1,23 @@
++package com.blog.entity;
++
++import com.baomidou.mybatisplus.annotation.*;
++import lombok.Data;
++
++import java.time.LocalDateTime;
++
++@Data
++@TableName("article_image")
++public class ArticleImage {
++
++    @TableId(type = IdType.AUTO)
++    private Long id;
++
++    private Long articleId;
++
++    private String url;
++
++    private Integer sortOrder;
++
++    @TableField(fill = FieldFill.INSERT)
++    private LocalDateTime createdAt;
++}
+diff --git a/blog-backend/src/main/java/com/blog/mapper/ArticleImageMapper.java b/blog-backend/src/main/java/com/blog/mapper/ArticleImageMapper.java
+new file mode 100644
+index 0000000..a8a59c1
+--- /dev/null
++++ b/blog-backend/src/main/java/com/blog/mapper/ArticleImageMapper.java
+@@ -0,0 +1,31 @@
++package com.blog.mapper;
++
++import com.baomidou.mybatisplus.core.mapper.BaseMapper;
++import com.blog.entity.ArticleImage;
++import org.apache.ibatis.annotations.Delete;
++import org.apache.ibatis.annotations.Mapper;
++import org.apache.ibatis.annotations.Param;
++import org.apache.ibatis.annotations.Select;
++
++import java.util.List;
++import java.util.Map;
++
++@Mapper
++public interface ArticleImageMapper extends BaseMapper<ArticleImage> {
++
++    @Delete("DELETE FROM article_image WHERE article_id = #{articleId}")
++    int deleteByArticleId(@Param("articleId") Long articleId);
++
++    @Select("SELECT * FROM article_image WHERE article_id = #{articleId} ORDER BY sort_order")
++    List<ArticleImage> selectByArticleId(@Param("articleId") Long articleId);
++
++    @Select("<script>SELECT article_id, COUNT(*) AS cnt FROM article_image WHERE article_id IN " +
++            "<foreach item='id' collection='ids' open='(' separator=',' close=')'>#{id}</foreach> " +
++            "GROUP BY article_id</script>")
++    List<Map<String, Object>> countByArticleIds(@Param("ids") List<Long> articleIds);
++
++    @Select("<script>SELECT * FROM article_image WHERE article_id IN " +
++            "<foreach item='id' collection='ids' open='(' separator=',' close=')'>#{id}</foreach> " +
++            "AND sort_order = 0</script>")
++    List<ArticleImage> selectCoverImages(@Param("ids") List<Long> articleIds);
++}
+diff --git a/blog-backend/src/main/java/com/blog/service/impl/ArticleServiceImpl.java b/blog-backend/src/main/java/com/blog/service/impl/ArticleServiceImpl.java
+index d0a0bb4..c8d1171 100644
+--- a/blog-backend/src/main/java/com/blog/service/impl/ArticleServiceImpl.java
++++ b/blog-backend/src/main/java/com/blog/service/impl/ArticleServiceImpl.java
+@@ -9,8 +9,10 @@ import com.blog.dto.ArticleQueryDTO;
+ import com.blog.entity.Article;
+ import com.blog.entity.ArticleHistory;
+ import com.blog.entity.ArticleRead;
++import com.blog.entity.ArticleImage;
+ import com.blog.entity.ArticleTag;
+ import com.blog.mapper.*;
++import com.blog.mapper.ArticleImageMapper;
+ import com.blog.service.ArticleService;
+ import com.blog.util.AuthContext;
+ import java.util.Objects;
+@@ -20,16 +22,21 @@ import org.slf4j.Logger;
+ import org.slf4j.LoggerFactory;
+ import org.springframework.amqp.rabbit.core.RabbitTemplate;
+ import org.springframework.beans.factory.annotation.Autowired;
++import org.springframework.beans.factory.annotation.Value;
+ import org.springframework.data.redis.core.StringRedisTemplate;
+ import org.springframework.stereotype.Service;
+ import org.springframework.transaction.annotation.Transactional;
+ 
++import java.io.File;
+ import java.io.Serializable;
+ import java.time.Duration;
+ import java.time.LocalDateTime;
+ import java.util.Collection;
++import java.util.Collections;
++import java.util.HashMap;
+ import java.util.List;
+ import java.util.Map;
++import java.util.stream.Collectors;
+ 
+ @Service
+ public class ArticleServiceImpl extends ServiceImpl<ArticleMapper, Article> implements ArticleService {
+@@ -65,6 +72,12 @@ public class ArticleServiceImpl extends ServiceImpl<ArticleMapper, Article> impl
+     @Autowired
+     private TagMapper tagMapper;
+ 
++    @Autowired
++    private ArticleImageMapper articleImageMapper;
++
++    @Value("${app.upload.dir:uploads}")
++    private String uploadDir;
++
+     @Autowired(required = false)
+     private StringRedisTemplate redisTemplate;
+ 
+@@ -95,6 +108,19 @@ public class ArticleServiceImpl extends ServiceImpl<ArticleMapper, Article> impl
+             throw new RuntimeException("Article not found: " + id);
+         }
+ 
++        // Populate images
++        List<ArticleImage> articleImages = articleImageMapper.selectByArticleId((Long) id);
++        if (!articleImages.isEmpty()) {
++            article.setImages(articleImages.stream()
++                    .map(ArticleImage::getUrl)
++                    .collect(Collectors.toList()));
++            article.setCoverImage(articleImages.get(0).getUrl());
++            article.setImageCount(articleImages.size());
++        } else {
++            article.setImages(Collections.emptyList());
++            article.setImageCount(0);
++        }
++
+         setCache(key, article);
+         return article;
+     }
+@@ -103,6 +129,18 @@ public class ArticleServiceImpl extends ServiceImpl<ArticleMapper, Article> impl
+     @Transactional
+     public boolean save(Article entity) {
+         boolean result = super.save(entity);
++
++        // Save images if provided
++        if (entity.getImages() != null && !entity.getImages().isEmpty()) {
++            for (int i = 0; i < entity.getImages().size(); i++) {
++                ArticleImage img = new ArticleImage();
++                img.setArticleId(entity.getId());
++                img.setUrl(entity.getImages().get(i));
++                img.setSortOrder(i);
++                articleImageMapper.insert(img);
++            }
++        }
++
+         deleteCache(CACHE_CATEGORY_STATS);
+         deleteTagCloudCache();
+         sendEvent("created", entity);
+@@ -113,6 +151,31 @@ public class ArticleServiceImpl extends ServiceImpl<ArticleMapper, Article> impl
+     @Transactional
+     public boolean updateById(Article entity) {
+         Article old = getById(entity.getId());
++
++        // Update images if provided
++        if (entity.getImages() != null) {
++            // Delete old images and files
++            List<ArticleImage> oldImages = articleImageMapper.selectByArticleId(entity.getId());
++            for (ArticleImage oldImg : oldImages) {
++                try {
++                    File file = new File(uploadDir, oldImg.getUrl().replace("/uploads/", ""));
++                    if (file.exists()) file.delete();
++                } catch (Exception e) {
++                    log.warn("Failed to delete image file: {}", oldImg.getUrl(), e);
++                }
++            }
++            articleImageMapper.deleteByArticleId(entity.getId());
++
++            // Insert new images
++            for (int i = 0; i < entity.getImages().size(); i++) {
++                ArticleImage img = new ArticleImage();
++                img.setArticleId(entity.getId());
++                img.setUrl(entity.getImages().get(i));
++                img.setSortOrder(i);
++                articleImageMapper.insert(img);
++            }
++        }
++
+         saveHistoryIfNeeded(old, entity);
+         boolean result = super.updateById(entity);
+         deleteCache(CACHE_ARTICLE + entity.getId());
+@@ -168,6 +231,18 @@ public class ArticleServiceImpl extends ServiceImpl<ArticleMapper, Article> impl
+         articleHistoryMapper.delete(new LambdaQueryWrapper<ArticleHistory>()
+                 .eq(ArticleHistory::getArticleId, articleId));
+ 
++        // 6.5. Clean up article images
++        List<ArticleImage> articleImages = articleImageMapper.selectByArticleId(articleId);
++        for (ArticleImage img : articleImages) {
++            try {
++                File file = new File(uploadDir, img.getUrl().replace("/uploads/", ""));
++                if (file.exists()) file.delete();
++            } catch (Exception e) {
++                log.warn("Failed to delete image file: {}", img.getUrl(), e);
++            }
++        }
++        articleImageMapper.deleteByArticleId(articleId);
++
+         // 7. Delete the article itself
+         boolean result = super.removeById(articleId);
+ 
+@@ -197,12 +272,26 @@ public class ArticleServiceImpl extends ServiceImpl<ArticleMapper, Article> impl
+             Page<Article> page = new Page<>(query.getPage(), query.getSize());
+             String tagStatus = query.getStatus() != null && !query.getStatus().isBlank()
+                     ? query.getStatus() : Article.STATUS_PUBLISHED;
+-            return baseMapper.selectByTagId(page,
++            IPage<Article> result = baseMapper.selectByTagId(page,
+                     query.getTagId(),
+                     query.getCategory(),
+                     tagStatus,
+                     query.getKeyword(),
+                     query.getAuthorId());
++
++            // Batch load coverImage and imageCount
++            List<Article> records = result.getRecords();
++            if (!records.isEmpty()) {
++                List<Long> ids = records.stream().map(Article::getId).collect(Collectors.toList());
++                Map<Long, String> coverMap = batchCoverMap(ids);
++                Map<Long, Integer> countMap = batchCountMap(ids);
++                for (Article a : records) {
++                    a.setCoverImage(coverMap.get(a.getId()));
++                    a.setImageCount(countMap.getOrDefault(a.getId(), 0));
++                    a.setImages(Collections.emptyList());
++                }
++            }
++            return result;
+         }
+ 
+         LambdaQueryWrapper<Article> wrapper = new LambdaQueryWrapper<>();
+@@ -227,7 +316,21 @@ public class ArticleServiceImpl extends ServiceImpl<ArticleMapper, Article> impl
+         wrapper.orderByDesc(Article::getCreatedAt);
+ 
+         Page<Article> page = new Page<>(query.getPage(), query.getSize());
+-        return baseMapper.selectPage(page, wrapper);
++        IPage<Article> result = baseMapper.selectPage(page, wrapper);
++
++        // Batch load coverImage and imageCount
++        List<Article> records = result.getRecords();
++        if (!records.isEmpty()) {
++            List<Long> ids = records.stream().map(Article::getId).collect(Collectors.toList());
++            Map<Long, String> coverMap = batchCoverMap(ids);
++            Map<Long, Integer> countMap = batchCountMap(ids);
++            for (Article a : records) {
++                a.setCoverImage(coverMap.get(a.getId()));
++                a.setImageCount(countMap.getOrDefault(a.getId(), 0));
++                a.setImages(Collections.emptyList());
++            }
++        }
++        return result;
+     }
+ 
+     @Override
+@@ -394,4 +497,25 @@ public class ArticleServiceImpl extends ServiceImpl<ArticleMapper, Article> impl
+             log.error("Failed to send RabbitMQ event: type={}, articleId={}", type, article.getId(), e);
+         }
+     }
++
++    // ==================== 图片批量加载 ====================
++
++    private Map<Long, String> batchCoverMap(List<Long> articleIds) {
++        List<ArticleImage> coverImages = articleImageMapper.selectCoverImages(articleIds);
++        Map<Long, String> map = new HashMap<>();
++        for (ArticleImage img : coverImages) {
++            map.put(img.getArticleId(), img.getUrl());
++        }
++        return map;
++    }
++
++    private Map<Long, Integer> batchCountMap(List<Long> articleIds) {
++        List<Map<String, Object>> rows = articleImageMapper.countByArticleIds(articleIds);
++        Map<Long, Integer> map = new HashMap<>();
++        for (Map<String, Object> row : rows) {
++            map.put(((Number) row.get("article_id")).longValue(),
++                    ((Number) row.get("cnt")).intValue());
++        }
++        return map;
++    }
+ }
+diff --git a/blog-backend/src/main/java/com/blog/task/ImageCleanupScheduler.java b/blog-backend/src/main/java/com/blog/task/ImageCleanupScheduler.java
+new file mode 100644
+index 0000000..a876bdf
+--- /dev/null
++++ b/blog-backend/src/main/java/com/blog/task/ImageCleanupScheduler.java
+@@ -0,0 +1,70 @@
++package com.blog.task;
++
++import com.blog.mapper.ArticleImageMapper;
++import com.blog.entity.ArticleImage;
++import org.slf4j.Logger;
++import org.slf4j.LoggerFactory;
++import org.springframework.beans.factory.annotation.Autowired;
++import org.springframework.beans.factory.annotation.Value;
++import org.springframework.scheduling.annotation.Scheduled;
++import org.springframework.stereotype.Component;
++
++import java.io.File;
++import java.time.Instant;
++import java.time.temporal.ChronoUnit;
++import java.util.List;
++import java.util.Set;
++import java.util.stream.Collectors;
++
++@Component
++public class ImageCleanupScheduler {
++
++    private static final Logger log = LoggerFactory.getLogger(ImageCleanupScheduler.class);
++
++    @Value("${app.upload.dir:uploads}")
++    private String uploadDir;
++
++    @Autowired
++    private ArticleImageMapper articleImageMapper;
++
++    /**
++     * 每天凌晨 3:00 清理孤儿图片文件（超过 24 小时未关联到文章）
++     */
++    @Scheduled(cron = "0 0 3 * * ?")
++    public void cleanOrphanImages() {
++        log.info("Starting orphan image cleanup...");
++        File articleDir = new File(uploadDir, "articles");
++        if (!articleDir.exists() || !articleDir.isDirectory()) {
++            log.info("Article image directory does not exist, skipping cleanup.");
++            return;
++        }
++
++        // Collect all URLs currently in DB
++        List<ArticleImage> allImages = articleImageMapper.selectList(null);
++        Set<String> dbUrls = allImages.stream()
++                .map(img -> img.getUrl().replace("/uploads/articles/", ""))
++                .collect(Collectors.toSet());
++
++        File[] files = articleDir.listFiles();
++        if (files == null) {
++            log.info("No files in article image directory.");
++            return;
++        }
++
++        long cutoff = Instant.now().minus(24, ChronoUnit.HOURS).toEpochMilli();
++        int deleted = 0;
++
++        for (File file : files) {
++            if (!file.isFile()) continue;
++            String filename = file.getName();
++            if (!dbUrls.contains(filename) && file.lastModified() < cutoff) {
++                if (file.delete()) {
++                    deleted++;
++                    log.debug("Deleted orphan image: {}", filename);
++                }
++            }
++        }
++
++        log.info("Orphan image cleanup completed. Deleted {} files.", deleted);
++    }
++}
+diff --git a/blog-backend/src/main/resources/application.yml b/blog-backend/src/main/resources/application.yml
+index 24e7302..b26bd0f 100644
+--- a/blog-backend/src/main/resources/application.yml
++++ b/blog-backend/src/main/resources/application.yml
+@@ -40,8 +40,8 @@ mybatis-plus:
+ 
+   servlet:
+     multipart:
+-      max-file-size: 2MB
+-      max-request-size: 2MB
++      max-file-size: 5MB
++      max-request-size: 5MB
+ 
+ server:
+   port: 8080
+diff --git a/blog-backend/src/main/resources/schema.sql b/blog-backend/src/main/resources/schema.sql
+index d66fab0..221e0e1 100644
+--- a/blog-backend/src/main/resources/schema.sql
++++ b/blog-backend/src/main/resources/schema.sql
+@@ -110,3 +110,12 @@ CREATE TABLE IF NOT EXISTS user_follow (
+     INDEX idx_follower (follower_id),
+     INDEX idx_following (following_id)
+ );
++
++CREATE TABLE IF NOT EXISTS article_image (
++    id         BIGINT AUTO_INCREMENT PRIMARY KEY,
++    article_id BIGINT NOT NULL,
++    url        VARCHAR(500) NOT NULL,
++    sort_order INT NOT NULL DEFAULT 0,
++    created_at DATETIME NOT NULL,
++    INDEX idx_article_id (article_id)
++);
+diff --git a/blog-frontend/api/modules/article.ts b/blog-frontend/api/modules/article.ts
+index 5a1a3ff..780558e 100644
+--- a/blog-frontend/api/modules/article.ts
++++ b/blog-frontend/api/modules/article.ts
+@@ -1,4 +1,4 @@
+-import { api } from '~/api/index'
++import { api, apiRequest } from '~/api/index'
+ import type {
+   Article,
+   ArticleHistory,
+@@ -81,3 +81,13 @@ export function getArticleHistoryDetail(articleId: number, historyId: number) {
+ export function rollbackArticle(articleId: number, historyId: number) {
+   return api.post<Article>(`/api/articles/${articleId}/rollback/${historyId}`)
+ }
++
++export async function uploadArticleImage(file: File): Promise<string> {
++  const formData = new FormData()
++  formData.append('file', file)
++  const result = await apiRequest<{ url: string }>('/api/upload/article-image', {
++    method: 'POST',
++    body: formData,
++  })
++  return result.url
++}
+diff --git a/blog-frontend/components/article/ArticleCard.vue b/blog-frontend/components/article/ArticleCard.vue
+index 0f23bb4..77078a8 100644
+--- a/blog-frontend/components/article/ArticleCard.vue
++++ b/blog-frontend/components/article/ArticleCard.vue
+@@ -1,13 +1,33 @@
+ <template>
+   <NCard
+-    class="article-card overflow-hidden transition-all duration-300 hover:shadow-md hover:-translate-y-1"
++    class="article-card overflow-hidden transition-all duration-300 hover:shadow-md hover:-translate-y-1 cursor-pointer"
+     :bordered="false"
+     size="small"
+     @click="navigateTo(`/article/${article.id}`)"
+   >
+-    <!-- Cover Image Placeholder -->
++    <!-- Cover Image -->
++    <div v-if="article.coverImage && !imgFailed" class="relative overflow-hidden bg-gray-100">
++      <img
++        :src="imageUrl(article.coverImage)"
++        :alt="article.title"
++        class="w-full block object-cover"
++        :style="{ minHeight: '120px', maxHeight: '320px' }"
++        loading="lazy"
++        @error="imgFailed = true"
++      />
++      <!-- Multi-image count badge -->
++      <span
++        v-if="article.imageCount && article.imageCount > 1"
++        class="absolute bottom-2 right-2 bg-black/60 text-white text-xs px-1.5 py-0.5 rounded"
++      >
++        +{{ article.imageCount - 1 }}
++      </span>
++    </div>
++
++    <!-- No-image fallback -->
+     <div
+-      class="h-32 bg-gradient-to-br from-primary-pale to-primary/10 flex items-center justify-center text-4xl"
++      v-else
++      class="h-24 bg-gradient-to-br from-primary-pale to-primary/10 flex items-center justify-center text-3xl"
+     >
+       {{ coverEmoji }}
+     </div>
+@@ -46,7 +66,7 @@
+       </div>
+ 
+       <!-- Meta -->
+-      <div class="flex items-center justify-between text-xs text-text-secondary">
++      <div class="flex items-center justify-between text-xs text-text-secondary mt-1">
+         <div class="flex items-center gap-3">
+           <span class="flex items-center gap-1">
+             <NIcon size="14"><EyeOutline /></NIcon>
+@@ -73,12 +93,15 @@ import { getArticleTags } from '~/api/modules/article'
+ import { getUserProfile } from '~/api/modules/user'
+ import type { Article, Tag, UserProfile } from '~/types'
+ 
++const API_BASE = 'http://localhost:8080'
++
+ const props = defineProps<{
+   article: Article
+ }>()
+ 
+ const tags = ref<Tag[]>([])
+ const author = ref<UserProfile | null>(null)
++const imgFailed = ref(false)
+ 
+ const emojis = ['📝', '🌿', '📷', '🎨', '🍃', '✨', '📖', '🌸', '🌲', '🖋️']
+ 
+@@ -87,13 +110,18 @@ const coverEmoji = computed(() => {
+   return emojis[hash % emojis.length]
+ })
+ 
++function imageUrl(src: string): string {
++  if (!src) return ''
++  if (src.startsWith('http://') || src.startsWith('https://')) return src
++  return API_BASE + src
++}
++
+ function formatCount(n: number): string {
+   if (n >= 10000) return (n / 10000).toFixed(1) + 'w'
+   if (n >= 1000) return (n / 1000).toFixed(1) + 'k'
+   return String(n)
+ }
+ 
+-// Fetch tags and author for this article
+ async function fetchTags() {
+   try {
+     tags.value = await getArticleTags(props.article.id)
+@@ -103,7 +131,7 @@ async function fetchTags() {
+ }
+ 
+ async function fetchAuthor() {
+-  if (!props.article.authorId) return // skip articles without author
++  if (!props.article.authorId) return
+   try {
+     author.value = await getUserProfile(props.article.authorId)
+   } catch {
+@@ -111,6 +139,11 @@ async function fetchAuthor() {
+   }
+ }
+ 
++// Reset imgFailed when coverImage changes
++watch(() => props.article.coverImage, () => {
++  imgFailed.value = false
++})
++
+ onMounted(() => {
+   fetchTags()
+   fetchAuthor()
+diff --git a/blog-frontend/pages/article/[id].vue b/blog-frontend/pages/article/[id].vue
+index 824c44f..37b34c0 100644
+--- a/blog-frontend/pages/article/[id].vue
++++ b/blog-frontend/pages/article/[id].vue
+@@ -88,6 +88,67 @@
+         class="mb-6"
+       />
+ 
++      <!-- Image Carousel -->
++      <div
++        v-if="article.images && article.images.length > 0"
++        class="relative mb-6 rounded-xl overflow-hidden bg-gray-100"
++        style="height: 360px"
++      >
++        <!-- Track -->
++        <div
++          ref="carouselTrack"
++          class="carousel-track flex overflow-x-auto snap-x snap-mandatory h-full"
++          style="scrollbar-width: none; -ms-overflow-style: none;"
++          @scroll="onCarouselScroll"
++        >
++          <div
++            v-for="(img, i) in article.images"
++            :key="i"
++            class="flex-shrink-0 w-full h-full snap-center flex items-center justify-center"
++            @click="openLightbox(i)"
++          >
++            <img
++              :src="carouselImageUrl(img)"
++              class="max-w-full max-h-full object-contain cursor-pointer"
++              :alt="`图片 ${i + 1}`"
++              loading="lazy"
++            />
++          </div>
++        </div>
++
++        <!-- Prev button -->
++        <button
++          v-if="article.images.length > 1 && currentSlide > 0"
++          class="absolute left-3 top-1/2 -translate-y-1/2 w-8 h-8 rounded-full bg-white/80 shadow flex items-center justify-center hover:bg-white transition-colors z-10"
++          @click.stop="slideTo(currentSlide - 1)"
++        >
++          <NIcon size="18"><ChevronBackOutline /></NIcon>
++        </button>
++
++        <!-- Next button -->
++        <button
++          v-if="article.images.length > 1 && currentSlide < article.images.length - 1"
++          class="absolute right-3 top-1/2 -translate-y-1/2 w-8 h-8 rounded-full bg-white/80 shadow flex items-center justify-center hover:bg-white transition-colors z-10"
++          @click.stop="slideTo(currentSlide + 1)"
++        >
++          <NIcon size="18"><ChevronForwardOutline /></NIcon>
++        </button>
++
++        <!-- Dot indicators -->
++        <div
++          v-if="article.images.length > 1"
++          class="absolute bottom-3 left-1/2 -translate-x-1/2 flex gap-1.5"
++        >
++          <span
++            v-for="(_, i) in article.images"
++            :key="i"
++            class="rounded-full transition-all duration-200"
++            :class="i === currentSlide ? 'bg-white w-4 h-2' : 'bg-white/50 w-2 h-2'"
++            :style="{ width: i === currentSlide ? '16px' : '8px', height: '8px' }"
++          />
++        </div>
++      </div>
++
+       <!-- Tags -->
+       <div v-if="tags.length" class="flex gap-2 mb-6 flex-wrap">
+         <TagBadge v-for="tag in tags" :key="tag.id" :tag="tag" />
+@@ -105,11 +166,62 @@
+       </div>
+     </template>
+   </div>
++
++  <!-- Lightbox -->
++  <Teleport to="body">
++    <div
++      v-if="lightboxVisible"
++      class="fixed inset-0 z-50 bg-black/90 flex items-center justify-center"
++      @click="closeLightbox"
++      @keydown.escape="closeLightbox"
++    >
++      <!-- Close button -->
++      <button
++        class="absolute top-4 right-4 w-10 h-10 rounded-full bg-white/20 text-white text-xl flex items-center justify-center hover:bg-white/30 transition-colors z-20"
++        @click="closeLightbox"
++      >
++        ✕
++      </button>
++
++      <!-- Prev -->
++      <button
++        v-if="article?.images && article.images.length > 1 && lightboxIndex > 0"
++        class="absolute left-4 top-1/2 -translate-y-1/2 w-10 h-10 rounded-full bg-white/20 text-white flex items-center justify-center hover:bg-white/30 transition-colors z-20"
++        @click.stop="lightboxIndex--"
++      >
++        <NIcon size="20"><ChevronBackOutline /></NIcon>
++      </button>
++
++      <!-- Image -->
++      <img
++        :src="carouselImageUrl(article?.images?.[lightboxIndex] || '')"
++        class="max-w-[90vw] max-h-[90vh] object-contain select-none"
++        @click.stop
++      />
++
++      <!-- Next -->
++      <button
++        v-if="article?.images && article.images.length > 1 && lightboxIndex < article.images.length - 1"
++        class="absolute right-4 top-1/2 -translate-y-1/2 w-10 h-10 rounded-full bg-white/20 text-white flex items-center justify-center hover:bg-white/30 transition-colors z-20"
++        @click.stop="lightboxIndex++"
++      >
++        <NIcon size="20"><ChevronForwardOutline /></NIcon>
++      </button>
++
++      <!-- Counter -->
++      <div
++        v-if="article?.images && article.images.length > 1"
++        class="absolute bottom-6 left-1/2 -translate-x-1/2 text-white text-sm bg-black/40 px-3 py-1 rounded-full"
++      >
++        {{ lightboxIndex + 1 }} / {{ article.images.length }}
++      </div>
++    </div>
++  </Teleport>
+ </template>
+ 
+ <script setup lang="ts">
+ import { NResult, NButton, NIcon, NPopconfirm, useMessage } from 'naive-ui'
+-import { ArrowBackOutline, TrashOutline } from '@vicons/ionicons5'
++import { ArrowBackOutline, TrashOutline, ChevronBackOutline, ChevronForwardOutline } from '@vicons/ionicons5'
+ import { getArticleById, getArticleTags, getArticleStats, deleteArticle } from '~/api/modules/article'
+ import { getUserProfile, toggleFollow } from '~/api/modules/user'
+ import { useAuthStore } from '~/stores/auth'
+@@ -130,6 +242,45 @@ const loading = ref(true)
+ const deleting = ref(false)
+ const error = ref<string | null>(null)
+ 
++// ========== Image Carousel ==========
++const carouselTrack = ref<HTMLElement | null>(null)
++const currentSlide = ref(0)
++const API_BASE = 'http://localhost:8080'
++
++function carouselImageUrl(src: string): string {
++  if (!src) return ''
++  if (src.startsWith('http://') || src.startsWith('https://')) return src
++  return API_BASE + src
++}
++
++function onCarouselScroll() {
++  if (!carouselTrack.value) return
++  const track = carouselTrack.value
++  const slideWidth = track.clientWidth
++  if (slideWidth === 0) return
++  currentSlide.value = Math.round(track.scrollLeft / slideWidth)
++}
++
++function slideTo(index: number) {
++  if (!carouselTrack.value) return
++  const slideWidth = carouselTrack.value.clientWidth
++  carouselTrack.value.scrollTo({ left: slideWidth * index, behavior: 'smooth' })
++  currentSlide.value = index
++}
++
++// ========== Lightbox ==========
++const lightboxVisible = ref(false)
++const lightboxIndex = ref(0)
++
++function openLightbox(index: number) {
++  lightboxIndex.value = index
++  lightboxVisible.value = true
++}
++
++function closeLightbox() {
++  lightboxVisible.value = false
++}
++
+ const articleId = computed(() => Number(route.params.id))
+ const canDelete = computed(() => {
+   if (!article.value) return false
+@@ -226,3 +377,9 @@ watch(articleId, () => {
+   fetchArticle()
+ })
+ </script>
++
++<style scoped>
++.carousel-track::-webkit-scrollbar {
++  display: none;
++}
++</style>
+diff --git a/blog-frontend/pages/article/write.vue b/blog-frontend/pages/article/write.vue
+index 16063ed..ed25c82 100644
+--- a/blog-frontend/pages/article/write.vue
++++ b/blog-frontend/pages/article/write.vue
+@@ -25,6 +25,55 @@
+           />
+         </NFormItem>
+ 
++        <!-- Image Upload Area -->
++        <div class="mb-4">
++          <label class="block text-sm font-medium mb-2" style="color: #333">
++            图片（最多9张）
++          </label>
++          <div class="flex gap-3 flex-wrap">
++            <!-- Uploaded thumbnails -->
++            <div
++              v-for="(img, idx) in uploadedImages"
++              :key="idx"
++              class="relative w-20 h-20 rounded-lg overflow-hidden bg-gray-100 flex-shrink-0 group"
++              :class="{ 'opacity-50': uploadingStates[idx] }"
++            >
++              <img :src="img" class="w-full h-full object-cover" />
++              <NSpin v-if="uploadingStates[idx]" size="small" class="absolute inset-0 m-auto" />
++              <button
++                v-else
++                class="absolute top-0.5 right-0.5 w-5 h-5 rounded-full bg-black/50 text-white text-xs flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"
++                @click="removeImage(idx)"
++              >
++                ✕
++              </button>
++              <div
++                class="absolute bottom-0 left-0 right-0 h-5 bg-gradient-to-t from-black/30 to-transparent opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center"
++              >
++                <span class="text-white text-xs">{{ idx === 0 ? '封面' : idx + 1 }}</span>
++              </div>
++            </div>
++
++            <!-- Add button -->
++            <div
++              v-if="uploadedImages.length < 9"
++              class="w-20 h-20 rounded-lg border-2 border-dashed border-gray-300 flex flex-col items-center justify-center cursor-pointer hover:border-primary transition-colors bg-gray-50 flex-shrink-0"
++              @click="triggerImageInput"
++            >
++              <span class="text-2xl text-gray-400">+</span>
++              <span class="text-xs text-gray-400 mt-0.5">添加</span>
++            </div>
++          </div>
++          <input
++            ref="imageInputRef"
++            type="file"
++            accept="image/*"
++            multiple
++            class="hidden"
++            @change="handleImageSelect"
++          />
++        </div>
++
+         <NFormItem path="tags" label="分类标签">
+           <NSelect
+             v-model:value="selectedTagIds"
+@@ -54,10 +103,10 @@
+ </template>
+ 
+ <script setup lang="ts">
+-import { NCard, NForm, NFormItem, NInput, NButton, NIcon, NSelect, NSpace, useMessage } from 'naive-ui'
++import { NCard, NForm, NFormItem, NInput, NButton, NIcon, NSelect, NSpace, NSpin, useMessage } from 'naive-ui'
+ import { ArrowBackOutline } from '@vicons/ionicons5'
+ import type { FormInst, FormRules } from 'naive-ui'
+-import { createArticle, updateArticle, getArticleById, getArticleTags, setArticleTags } from '~/api/modules/article'
++import { createArticle, updateArticle, getArticleById, getArticleTags, setArticleTags, uploadArticleImage } from '~/api/modules/article'
+ import { getTagCloud } from '~/api/modules/tag'
+ import { useAuthStore } from '~/stores/auth'
+ 
+@@ -84,6 +133,74 @@ const tagOptions = ref<{ label: string; value: number }[]>([])
+ // Map tag id to name for category derivation
+ const tagNameMap = ref<Record<number, string>>({})
+ 
++// ========== 图片上传 ==========
++const uploadedImages = ref<string[]>([])
++const uploadingStates = ref<boolean[]>([])
++const imageInputRef = ref<HTMLInputElement | null>(null)
++
++function triggerImageInput() {
++  imageInputRef.value?.click()
++}
++
++async function handleImageSelect(e: Event) {
++  const input = e.target as HTMLInputElement
++  const files = input.files
++  if (!files || files.length === 0) return
++
++  const remaining = 9 - uploadedImages.value.length
++  if (files.length > remaining) {
++    message.warning(`最多再添加 ${remaining} 张图片`)
++    input.value = ''
++    return
++  }
++
++  for (let i = 0; i < files.length; i++) {
++    const file = files[i]
++
++    if (file.size > 5 * 1024 * 1024) {
++      message.warning(`图片 "${file.name}" 超过 5MB 限制`)
++      continue
++    }
++
++    const idx = uploadedImages.value.length
++    uploadedImages.value.push('')
++    uploadingStates.value.push(true)
++
++    try {
++      const localUrl = URL.createObjectURL(file)
++      uploadedImages.value[idx] = localUrl
++
++      const url = await uploadArticleImage(file)
++      uploadedImages.value[idx] = url.startsWith('http')
++        ? url
++        : `http://localhost:8080${url}`
++    } catch (err: any) {
++      message.error(`上传 "${file.name}" 失败: ${err.message || '未知错误'}`)
++      uploadedImages.value.splice(idx, 1)
++      uploadingStates.value.splice(idx, 1)
++    } finally {
++      if (idx < uploadingStates.value.length) {
++        uploadingStates.value[idx] = false
++      }
++    }
++  }
++
++  input.value = ''
++}
++
++function removeImage(idx: number) {
++  uploadedImages.value.splice(idx, 1)
++  uploadingStates.value.splice(idx, 1)
++}
++
++function getRelativeUrls(): string[] {
++  return uploadedImages.value.map(u => {
++    if (u.startsWith('http://localhost:8080')) return u.replace('http://localhost:8080', '')
++    if (u.startsWith('blob:')) return ''
++    return u
++  }).filter(u => u && !u.startsWith('blob:'))
++}
++
+ const rules: FormRules = {
+   title: [
+     { required: true, message: '请输入标题', trigger: 'blur' },
+@@ -129,6 +246,7 @@ function loadDraft() {
+         form.title = data.title || ''
+         form.content = data.content || ''
+         if (data.tagIds) selectedTagIds.value = data.tagIds
++        if (data.images) uploadedImages.value = data.images
+       } catch {}
+     }
+   }
+@@ -140,6 +258,7 @@ function saveDraftToLocal() {
+       title: form.title,
+       content: form.content,
+       tagIds: selectedTagIds.value,
++      images: uploadedImages.value.filter(u => !u.startsWith('blob:')),
+     }))
+   }
+ }
+@@ -175,6 +294,12 @@ async function fetchArticleForEdit() {
+     // Load existing tags
+     const tags = await getArticleTags(editId.value!)
+     selectedTagIds.value = tags.map(t => t.id)
++    // Restore images
++    if (article.images && article.images.length > 0) {
++      uploadedImages.value = article.images.map((u: string) =>
++        u.startsWith('http') ? u : `http://localhost:8080${u}`
++      )
++    }
+   } catch (err: any) {
+     message.error('加载文章失败')
+   }
+@@ -183,14 +308,23 @@ async function fetchArticleForEdit() {
+ async function saveArticle(status: 'draft' | 'published') {
+   saving.value = true
+   try {
++    // Wait for any still-uploading images
++    const stillUploading = uploadingStates.value.some(s => s)
++    if (stillUploading) {
++      message.warning('图片还在上传中，请稍候...')
++      saving.value = false
++      return
++    }
++
++    const imageUrls = getRelativeUrls()
+     const category = getCategory()
+     let articleId: number
+ 
+     if (isEdit.value && editId.value) {
+-      await updateArticle(editId.value, { title: form.title, category, content: form.content, status })
++      await updateArticle(editId.value, { title: form.title, category, content: form.content, status, images: imageUrls })
+       articleId = editId.value
+     } else {
+-      const article = await createArticle({ title: form.title, category, content: form.content, status })
++      const article = await createArticle({ title: form.title, category, content: form.content, status, images: imageUrls })
+       articleId = article.id
+     }
+ 
+diff --git a/blog-frontend/pages/index.vue b/blog-frontend/pages/index.vue
+index 6c62276..0fc79d6 100644
+--- a/blog-frontend/pages/index.vue
++++ b/blog-frontend/pages/index.vue
+@@ -43,8 +43,13 @@
+     </div>
+ 
+     <!-- Article Waterfall Grid -->
+-    <div v-if="loading" class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
+-      <div v-for="i in 8" :key="i" class="skeleton h-48 rounded-card" />
++    <div v-if="loading" class="flex flex-wrap gap-4">
++      <div
++        v-for="i in 8"
++        :key="i"
++        class="skeleton rounded-card"
++        :style="{ width: `calc(${100 / columnCount}% - ${gap * (columnCount - 1) / columnCount}px - 1px)`, height: (140 + (i % 3) * 40) + 'px' }"
++      />
+     </div>
+ 
+     <div v-else-if="error" class="flex flex-col items-center py-20">
+@@ -64,8 +69,15 @@
+     </div>
+ 
+     <template v-else>
+-      <div class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
+-        <ArticleCard v-for="article in articles" :key="article.id" :article="article" />
++      <div ref="masonryRef" class="masonry-container relative w-full" :style="{ height: containerHeight + 'px' }">
++        <div
++          v-for="(article, i) in articles"
++          :key="article.id"
++          class="masonry-item absolute transition-all duration-300"
++          :style="getCardStyle(i)"
++        >
++          <ArticleCard :article="article" />
++        </div>
+       </div>
+ 
+       <!-- 滚动加载指示器 -->
+@@ -105,6 +117,91 @@ const hasMore = ref(true)
+ const pageSize = 12
+ const sentinelRef = ref<HTMLElement | null>(null)
+ 
++// ========== Masonry Layout ==========
++const masonryRef = ref<HTMLElement | null>(null)
++const columnCount = ref(3)
++const gap = 16
++const containerHeight = ref(600)
++
++interface CardPos {
++  left: string
++  top: string
++  width: string
++}
++
++const cardPositions = ref<CardPos[]>([])
++
++function updateColumnCount() {
++  if (!import.meta.client) return
++  const w = window.innerWidth
++  const oldCount = columnCount.value
++  if (w < 640) columnCount.value = 2
++  else if (w < 1024) columnCount.value = 3
++  else columnCount.value = 4
++  if (oldCount !== columnCount.value) {
++    nextTick(() => layoutCards())
++  }
++}
++
++function getColumnWidth(): number {
++  if (!masonryRef.value) return 280
++  const w = masonryRef.value.clientWidth
++  if (w <= 0) return 280
++  return (w - gap * (columnCount.value - 1)) / columnCount.value
++}
++
++function estimateCardHeight(article: Article): number {
++  let h = 120 // base: title + meta + padding
++  if (article.coverImage) {
++    h = 250 // image card
++  }
++  // Use deterministic variation based on article id
++  const variation = article.id ? (article.id % 3) * 15 : 0
++  return h + variation
++}
++
++function layoutCards() {
++  const n = articles.value.length
++  if (n === 0 || columnCount.value === 0) {
++    containerHeight.value = 0
++    return
++  }
++
++  const colWidth = getColumnWidth()
++  const heights = new Array(columnCount.value).fill(0)
++  const positions: CardPos[] = []
++
++  for (let i = 0; i < n; i++) {
++    // Find shortest column
++    let minCol = 0
++    for (let c = 1; c < columnCount.value; c++) {
++      if (heights[c] < heights[minCol]) minCol = c
++    }
++
++    const cardHeight = estimateCardHeight(articles.value[i])
++    positions.push({
++      left: (minCol * (colWidth + gap)) + 'px',
++      top: heights[minCol] + 'px',
++      width: colWidth + 'px',
++    })
++    heights[minCol] += cardHeight + gap
++  }
++
++  cardPositions.value = positions
++  containerHeight.value = Math.max(...heights, 200)
++}
++
++function getCardStyle(index: number): Record<string, string> {
++  if (index < cardPositions.value.length) {
++    return cardPositions.value[index] as Record<string, string>
++  }
++  return { left: '0px', top: '0px', width: '200px' }
++}
++
++function handleResize() {
++  updateColumnCount()
++}
++
+ async function fetchHotArticles() {
+   try {
+     const result = await getHotArticles()
+@@ -184,23 +281,29 @@ function setupObserver() {
+ 
+ // 每次 articles 更新后或切换标签后重新挂载哨兵
+ watch([() => articles.value.length, activeTagId], () => {
+-  nextTick(() => setupObserver())
++  nextTick(() => {
++    layoutCards()
++    setupObserver()
++  })
+ })
+ 
+ // 切换标签时重置列表
+ watch(activeTagId, () => {
+   currentPage.value = 1
+   hasMore.value = true
+-  fetchArticles(1)
++  fetchArticles(1).then(() => nextTick(() => layoutCards()))
+ })
+ 
+ onMounted(() => {
++  updateColumnCount()
+   fetchHotArticles()
+   fetchTags()
+-  fetchArticles()
++  fetchArticles().then(() => nextTick(() => layoutCards()))
++  window.addEventListener('resize', handleResize)
+ })
+ 
+ onUnmounted(() => {
+   observer?.disconnect()
++  window.removeEventListener('resize', handleResize)
+ })
+ </script>
+diff --git a/blog-frontend/types/index.ts b/blog-frontend/types/index.ts
+index 61ace26..d143e04 100644
+--- a/blog-frontend/types/index.ts
++++ b/blog-frontend/types/index.ts
+@@ -13,6 +13,9 @@ export interface Article {
+   authorId: number | null
+   createdAt: string
+   updatedAt: string
++  coverImage: string | null
++  images: string[]
++  imageCount: number
+ }
+ 
+ export interface User {

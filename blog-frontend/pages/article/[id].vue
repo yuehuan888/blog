@@ -173,7 +173,6 @@
       v-if="lightboxVisible"
       class="fixed inset-0 z-50 bg-black/90 flex items-center justify-center"
       @click="closeLightbox"
-      @keydown.escape="closeLightbox"
     >
       <!-- Close button -->
       <button
@@ -281,6 +280,19 @@ function closeLightbox() {
   lightboxVisible.value = false
 }
 
+// Handle Escape key for lightbox
+function onLightboxKeydown(e: KeyboardEvent) {
+  if (e.key === 'Escape') closeLightbox()
+}
+
+watch(lightboxVisible, (visible) => {
+  if (visible) {
+    document.addEventListener('keydown', onLightboxKeydown)
+  } else {
+    document.removeEventListener('keydown', onLightboxKeydown)
+  }
+})
+
 const articleId = computed(() => Number(route.params.id))
 const canDelete = computed(() => {
   if (!article.value) return false
@@ -371,6 +383,10 @@ async function fetchArticle() {
 
 onMounted(() => {
   fetchArticle()
+})
+
+onUnmounted(() => {
+  document.removeEventListener('keydown', onLightboxKeydown)
 })
 
 watch(articleId, () => {

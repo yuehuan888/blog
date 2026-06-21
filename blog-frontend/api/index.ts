@@ -24,6 +24,7 @@ const ERROR_ZH: Record<string, string> = {
   'File is empty': '文件为空',
   'Only image files are allowed': '只允许上传图片文件',
   'File size must be less than 2MB': '文件大小不能超过 2MB',
+  'File size must be less than 5MB': '文件大小不能超过 5MB',
   'Failed to save file': '文件保存失败',
   'Internal server error': '服务器内部错误',
   'Missing or invalid Authorization header': '缺少或无效的认证信息',
