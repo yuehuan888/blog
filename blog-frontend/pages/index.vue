@@ -75,11 +75,10 @@
           :key="colIdx"
           class="flex-1 flex flex-col gap-5 min-w-0"
         >
-          <ArticleCard
-            v-for="article in colCards"
-            :key="article.id"
-            :article="article"
-          />
+          <template v-for="item in colCards" :key="item.id">
+            <ArticleCard v-if="!isVideo(item)" :article="item as Article" />
+            <VideoCard v-else :video="item as Video" />
+          </template>
         </div>
       </div>
 
@@ -102,9 +101,13 @@
 import { NTag, NButton, NResult, NSpin } from 'naive-ui'
 import { getArticles, getHotArticles } from '~/api/modules/article'
 import { getTagCloud } from '~/api/modules/tag'
-import type { Article, HotArticleDTO, TagCloudItem } from '~/types'
+import type { Article, Video, FeedItem, HotArticleDTO, TagCloudItem } from '~/types'
 
-const articles = ref<Article[]>([])
+const articles = ref<FeedItem[]>([])
+
+function isVideo(item: FeedItem): item is Video {
+  return (item as any).type === 'video'
+}
 const hotArticles = ref<HotArticleDTO[]>([])
 const tags = ref<TagCloudItem[]>([])
 const activeTagId = ref<number | null>(null)
@@ -118,8 +121,8 @@ const sentinelRef = ref<HTMLElement | null>(null)
 
 // ========== Column distribution ==========
 const colCount = ref(4)
-// Each column holds its own list of articles — once assigned, a card stays in its column forever
-const columnCards = ref<Article[][]>([[], [], [], []])
+// Each column holds its own list of items — once assigned, a card stays in its column forever
+const columnCards = ref<FeedItem[][]>([[], [], [], []])
 
 function updateColCount() {
   if (typeof window === 'undefined') { colCount.value = 4; return }
@@ -129,22 +132,19 @@ function updateColCount() {
   else colCount.value = 4
 }
 
-function distributeToColumns(newArticles: Article[], isReset: boolean) {
+function distributeToColumns(newArticles: FeedItem[], isReset: boolean) {
   if (isReset) {
-    // Reset: clear all columns, redistribute everything
     columnCards.value = Array.from({ length: colCount.value }, () => [])
-    for (const article of newArticles) {
-      // Find column with fewest cards
+    for (const item of newArticles) {
       const shortest = columnCards.value.reduce((best, col, i) =>
         col.length < columnCards.value[best].length ? i : best, 0)
-      columnCards.value[shortest].push(article)
+      columnCards.value[shortest].push(item)
     }
   } else {
-    // Append: distribute new cards to shortest columns
-    for (const article of newArticles) {
+    for (const item of newArticles) {
       const shortest = columnCards.value.reduce((best, col, i) =>
         col.length < columnCards.value[best].length ? i : best, 0)
-      columnCards.value[shortest].push(article)
+      columnCards.value[shortest].push(item)
     }
   }
 }
@@ -179,12 +179,12 @@ async function fetchArticles(page = 1) {
     const newRecords = result.records || []
 
     if (page === 1) {
-      articles.value = newRecords
-      distributeToColumns(newRecords, true)
+      articles.value = newRecords as FeedItem[]
+      distributeToColumns(newRecords as FeedItem[], true)
       loading.value = false
     } else {
-      articles.value.push(...newRecords)
-      distributeToColumns(newRecords, false)
+      articles.value.push(...(newRecords as FeedItem[]))
+      distributeToColumns(newRecords as FeedItem[], false)
       loadingMore.value = false
     }
 

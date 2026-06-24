@@ -12,4 +12,5 @@ public class ArticleQueryDTO {
     private String keyword;
     private Long tagId;
     private Long authorId;
+    private String type; // null=all, 'article', 'video'
 }

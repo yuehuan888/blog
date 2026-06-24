@@ -154,3 +154,49 @@ export interface CommentForm {
   replyTo?: number | null
   content: string
 }
+
+// ========== Video Types ==========
+
+export interface Video extends Article {
+  type: 'video'
+  videoUrl: string
+  thumbnailUrl: string | null
+  duration: number | null
+  aiSummary: string | null
+  transcodeStatus: string | null
+}
+
+export type FeedItem = Article | Video
+
+export interface DanmakuItem {
+  id: number
+  articleId: number
+  userId: number
+  nickname?: string
+  content: string
+  timestampSec: number
+  color: string
+  mode: 'scroll' | 'top' | 'bottom'
+  createdAt: string
+}
+
+export interface ChunkedUploadState {
+  uploadId: string
+  fileHash: string
+  fileName: string
+  totalChunks: number
+  completedChunks: number[]
+  objectKey: string | null
+  videoUrl: string | null
+  timestamp: number
+}
+
+export interface ChunkedInitResponse {
+  uploadId: string
+  objectKey: string
+  totalChunks: number
+  chunkSize: number
+  uploadedChunks: number[]
+  uploaded: boolean
+  videoUrl?: string
+}

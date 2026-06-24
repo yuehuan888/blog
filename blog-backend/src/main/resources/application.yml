@@ -1,6 +1,6 @@
 spring:
   datasource:
-    url: jdbc:mysql://localhost:3306/blogsystem?useUnicode=true&characterEncoding=utf-8&serverTimezone=Asia/Shanghai
+    url: jdbc:mysql://localhost:3306/blogsystem?useUnicode=true&characterEncoding=utf-8&serverTimezone=Asia/Shanghai&allowMultiQueries=true
     username: root
     password: 123456
     driver-class-name: com.mysql.cj.jdbc.Driver
@@ -18,6 +18,10 @@ spring:
   autoconfigure:
     exclude:
       - org.springframework.boot.autoconfigure.amqp.RabbitAutoConfiguration
+  servlet:
+    multipart:
+      max-file-size: 200MB
+      max-request-size: 200MB
 
 # Redis 已启用（本地 localhost:6379）
 # RabbitMQ 自动配置已排除，如需启用请删除上面的 exclude：
@@ -38,11 +42,6 @@ mybatis-plus:
       logic-delete-value: 1
       logic-not-delete-value: 0
 
-  servlet:
-    multipart:
-      max-file-size: 5MB
-      max-request-size: 5MB
-
 server:
   port: 8080
 
@@ -53,3 +52,10 @@ app:
   jwt:
     secret: blog-system-secret-key-min-256-bits-long!!
     expiration: 86400000
+  storage:
+    type: local
+  queue:
+    type: local
+  ai:
+    dashscope:
+      api-key: sk-c03b11c8b5a24dbb922dfbbe38e209f9

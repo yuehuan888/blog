@@ -23,15 +23,20 @@ public class JwtUtil {
     }
 
     public String generateToken(Long userId, String username, String role) {
+        return generateToken(userId, username, role, null, null);
+    }
+
+    public String generateToken(Long userId, String username, String role, String nickname, String avatar) {
         Date now = new Date();
-        return Jwts.builder()
+        var builder = Jwts.builder()
                 .subject(userId.toString())
                 .claim("username", username)
                 .claim("role", role)
                 .issuedAt(now)
-                .expiration(new Date(now.getTime() + expiration))
-                .signWith(key)
-                .compact();
+                .expiration(new Date(now.getTime() + expiration));
+        if (nickname != null) builder.claim("nickname", nickname);
+        if (avatar != null) builder.claim("avatar", avatar);
+        return builder.signWith(key).compact();
     }
 
     public Claims parseToken(String token) {
@@ -52,5 +57,23 @@ public class JwtUtil {
 
     public String getRole(Claims claims) {
         return claims.get("role", String.class);
+    }
+
+    public String getNickname(Claims claims) {
+        return claims.get("nickname", String.class);
+    }
+
+    public String getAvatar(Claims claims) {
+        return claims.get("avatar", String.class);
+    }
+
+    /** Convenience: parse token and return userId. */
+    public Long getUserIdFromToken(String token) {
+        return getUserId(parseToken(token));
+    }
+
+    /** Convenience: parse token and return nickname. */
+    public String getNicknameFromToken(String token) {
+        return getNickname(parseToken(token));
     }
 }

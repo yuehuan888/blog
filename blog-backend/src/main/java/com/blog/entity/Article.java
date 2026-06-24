@@ -46,6 +46,25 @@ public class Article {
     @TableField(exist = false)
     private Integer imageCount;
 
+    // ====== Video fields ======
+    private String type;
+
+    private String videoUrl;
+
+    private String thumbnailUrl;
+
+    private Integer duration;
+
+    private String aiSummary;
+
+    private String transcodeStatus;
+
     public static final String STATUS_DRAFT = "draft";
     public static final String STATUS_PUBLISHED = "published";
+    public static final String TYPE_ARTICLE = "article";
+    public static final String TYPE_VIDEO = "video";
+    public static final String TRANSCODE_PENDING = "pending";
+    public static final String TRANSCODE_PROCESSING = "processing";
+    public static final String TRANSCODE_DONE = "done";
+    public static final String TRANSCODE_FAILED = "failed";
 }

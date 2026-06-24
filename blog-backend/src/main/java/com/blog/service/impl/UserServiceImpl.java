@@ -44,7 +44,8 @@ public class UserServiceImpl implements UserService {
         user.setRole("user");
         userMapper.insert(user);
 
-        String token = jwtUtil.generateToken(user.getId(), user.getUsername(), user.getRole());
+        String token = jwtUtil.generateToken(user.getId(), user.getUsername(), user.getRole(),
+                user.getNickname(), user.getAvatar());
         return new LoginResponse(token, user.getId(), user.getUsername(), user.getNickname(), user.getAvatar(), user.getRole());
     }
 
@@ -55,7 +56,8 @@ public class UserServiceImpl implements UserService {
             throw new RuntimeException("Invalid username or password");
         }
 
-        String token = jwtUtil.generateToken(user.getId(), user.getUsername(), user.getRole());
+        String token = jwtUtil.generateToken(user.getId(), user.getUsername(), user.getRole(),
+                user.getNickname(), user.getAvatar());
         return new LoginResponse(token, user.getId(), user.getUsername(), user.getNickname(), user.getAvatar(), user.getRole());
     }
 

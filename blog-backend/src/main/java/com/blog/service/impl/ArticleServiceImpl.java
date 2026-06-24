@@ -88,6 +88,9 @@ public class ArticleServiceImpl extends ServiceImpl<ArticleMapper, Article> impl
     @Autowired(required = false)
     private RabbitTemplate rabbitTemplate;
 
+    @Autowired(required = false)
+    private com.blog.service.task.VideoTaskService videoTaskService;
+
     @Autowired
     private ObjectMapper objectMapper;
 
@@ -132,6 +135,10 @@ public class ArticleServiceImpl extends ServiceImpl<ArticleMapper, Article> impl
     @Override
     @Transactional
     public boolean save(Article entity) {
+        // Default type to 'article' for backward compatibility
+        if (entity.getType() == null || entity.getType().isBlank()) {
+            entity.setType(Article.TYPE_ARTICLE);
+        }
         entity.setContent(sanitizeHtml(entity.getContent()));
         boolean result = super.save(entity);
 
@@ -149,7 +156,24 @@ public class ArticleServiceImpl extends ServiceImpl<ArticleMapper, Article> impl
         deleteCache(CACHE_CATEGORY_STATS);
         deleteTagCloudCache();
         sendEvent("created", entity);
+
+        // Trigger async transcode task for video type (AI analysis is user-triggered)
+        if (Article.TYPE_VIDEO.equals(entity.getType()) && videoTaskService != null) {
+            String videoUrl = entity.getVideoUrl();
+            String objectKey = videoUrl != null ? extractObjectKey(videoUrl) : null;
+            if (videoUrl != null) {
+                videoTaskService.submitTranscode(entity.getId(), videoUrl, objectKey);
+            }
+        }
+
         return result;
+    }
+
+    /** Extract objectKey from a video URL (e.g., /uploads/videos/abc123.mp4 → abc123.mp4). */
+    private String extractObjectKey(String videoUrl) {
+        if (videoUrl == null) return null;
+        int lastSlash = videoUrl.lastIndexOf('/');
+        return lastSlash >= 0 ? videoUrl.substring(lastSlash + 1) : videoUrl;
     }
 
     @Override
@@ -287,7 +311,8 @@ public class ArticleServiceImpl extends ServiceImpl<ArticleMapper, Article> impl
                     query.getCategory(),
                     tagStatus,
                     query.getKeyword(),
-                    query.getAuthorId());
+                    query.getAuthorId(),
+                    query.getType());
 
             // Batch load coverImage and imageCount
             List<Article> records = result.getRecords();
@@ -322,6 +347,10 @@ public class ArticleServiceImpl extends ServiceImpl<ArticleMapper, Article> impl
         }
         if (query.getAuthorId() != null) {
             wrapper.eq(Article::getAuthorId, query.getAuthorId());
+        }
+        // Video/Article type filter
+        if (query.getType() != null && !query.getType().isBlank()) {
+            wrapper.eq(Article::getType, query.getType());
         }
         wrapper.orderByDesc(Article::getCreatedAt);
 

@@ -26,7 +26,11 @@ const ERROR_ZH: Record<string, string> = {
   'Only image files are allowed': '只允许上传图片文件',
   'File size must be less than 2MB': '文件大小不能超过 2MB',
   'File size must be less than 5MB': '文件大小不能超过 5MB',
+  'File size must be less than 200MB': '文件大小不能超过 200MB',
+  'Only video files are allowed': '只允许上传视频文件',
   'Failed to save file': '文件保存失败',
+  'Chunk upload failed': '分片上传失败',
+  'Invalid uploadId or upload session expired': '上传会话已过期，请重新上传',
   'Internal server error': '服务器内部错误',
   'Missing or invalid Authorization header': '缺少或无效的认证信息',
   'Token expired': '登录已过期，请重新登录',
@@ -96,8 +100,9 @@ export async function apiRequest<T>(
 
     return result.data as T
   } catch (err: any) {
-    // ofetch FetchError: err.data = response body, err.statusCode = HTTP status
-    const rawMessage: string = err?.data?.message || ''
+    // err.message comes from our own throw (line 98) or ofetch's FetchError
+    // err.data.message comes from ofetch FetchError (when $fetch itself throws on non-JSON)
+    const rawMessage: string = err?.data?.message || err?.message || ''
     const apiMessage = translateError(rawMessage)
     const statusCode = err?.statusCode || err?.response?.status
 

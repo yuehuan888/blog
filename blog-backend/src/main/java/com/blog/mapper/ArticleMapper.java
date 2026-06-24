@@ -47,6 +47,7 @@ public interface ArticleMapper extends BaseMapper<Article> {
             "  AND (a.title LIKE CONCAT('%',#{keyword},'%') OR a.content LIKE CONCAT('%',#{keyword},'%')) " +
             "</if> " +
             "<if test='authorId != null'>AND a.author_id = #{authorId}</if> " +
+            "<if test='type != null and type != \"\"'>AND a.type = #{type}</if> " +
             "ORDER BY a.created_at DESC " +
             "</script>")
     IPage<Article> selectByTagId(Page<Article> page,
@@ -54,7 +55,8 @@ public interface ArticleMapper extends BaseMapper<Article> {
                                  @Param("category") String category,
                                  @Param("status") String status,
                                  @Param("keyword") String keyword,
-                                 @Param("authorId") Long authorId);
+                                 @Param("authorId") Long authorId,
+                                 @Param("type") String type);
 
     @Update("UPDATE article SET comment_count = comment_count + 1 WHERE id = #{id}")
     int incrementCommentCount(@Param("id") Long id);

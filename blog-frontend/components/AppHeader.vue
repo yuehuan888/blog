@@ -29,6 +29,12 @@
             </template>
             写文章
           </NButton>
+          <NButton text @click="navigateTo('/video/write')">
+            <template #icon>
+              <NIcon><VideocamOutline /></NIcon>
+            </template>
+            <span class="hidden md:inline">发视频</span>
+          </NButton>
           <!-- Avatar -->
           <div
             class="flex-shrink-0 cursor-pointer overflow-hidden"
@@ -65,7 +71,7 @@
 
 <script setup lang="ts">
 import { NButton, NDropdown, NIcon } from 'naive-ui'
-import { PencilOutline, ChevronDownOutline } from '@vicons/ionicons5'
+import { PencilOutline, VideocamOutline, ChevronDownOutline } from '@vicons/ionicons5'
 import { useAuthStore } from '~/stores/auth'
 
 const authStore = useAuthStore()
