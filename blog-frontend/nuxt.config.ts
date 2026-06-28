@@ -55,5 +55,8 @@ export default defineNuxtConfig({
     },
   },
 
+  // All pages use CSR (definePageMeta), no SSR needed
+  ssr: false,
+
   compatibilityDate: '2024-11-01',
 })
