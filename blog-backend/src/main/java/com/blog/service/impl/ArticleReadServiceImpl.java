@@ -117,7 +117,9 @@ public class ArticleReadServiceImpl implements ArticleReadService {
                                 // Get score for exact count
                                 Double score = redisTemplate.opsForZSet().score(zsetKey, member);
                                 int readCount = score != null ? score.intValue() : 0;
-                                result.add(new HotArticleDTO(id, a.getTitle(), readCount));
+                                HotArticleDTO dto = new HotArticleDTO(id, a.getTitle(), readCount);
+                                dto.setType(a.getType());
+                                result.add(dto);
                             }
                         }
                     }
@@ -148,7 +150,9 @@ public class ArticleReadServiceImpl implements ArticleReadService {
             int count = ((Number) row.get("cnt")).intValue();
             try {
                 Article article = articleService.getById(articleId);
-                result.add(new HotArticleDTO(articleId, article.getTitle(), count));
+                HotArticleDTO dto = new HotArticleDTO(articleId, article.getTitle(), count);
+                dto.setType(article.getType());
+                result.add(dto);
             } catch (Exception e) {
                 log.warn("Article not found for hot list: id={}", articleId);
             }

@@ -10,5 +10,12 @@ import lombok.NoArgsConstructor;
 public class HotArticleDTO {
     private Long articleId;
     private String title;
+    private String type;
     private int readCount;
+
+    public HotArticleDTO(Long articleId, String title, int readCount) {
+        this.articleId = articleId;
+        this.title = title;
+        this.readCount = readCount;
+    }
 }

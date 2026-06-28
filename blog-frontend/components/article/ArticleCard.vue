@@ -3,7 +3,7 @@
     class="article-card overflow-hidden transition-all duration-300 hover:shadow-md hover:-translate-y-1 cursor-pointer"
     :bordered="false"
     size="small"
-    @click="navigateTo(`/article/${article.id}`)"
+    @click="navigateTo(article.type === 'video' ? `/video/${article.id}` : `/article/${article.id}`)"
   >
     <!-- Cover Image -->
     <div v-if="article.coverImage && !imgFailed" class="relative overflow-hidden bg-gray-100">

@@ -19,7 +19,10 @@
 
     <template v-else>
       <div class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
-        <ArticleCard v-for="article in articles" :key="article.id" :article="article" />
+        <template v-for="article in articles" :key="article.id">
+          <ArticleCard v-if="article.type !== 'video'" :article="article" />
+          <VideoCard v-else :video="article as Video" />
+        </template>
       </div>
 
       <NPagination
@@ -38,7 +41,8 @@ import { NButton, NPagination, NIcon } from 'naive-ui'
 import { ArrowBackOutline } from '@vicons/ionicons5'
 import { getArticles } from '~/api/modules/article'
 import { getTagById } from '~/api/modules/tag'
-import type { Article } from '~/types'
+import VideoCard from '~/components/article/VideoCard.vue'
+import type { Article, Video } from '~/types'
 
 const route = useRoute()
 const router = useRouter()

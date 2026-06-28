@@ -5,6 +5,7 @@ export interface Article {
   title: string
   content: string
   category: string
+  type: string
   status: 'draft' | 'published'
   likeCount: number
   favoriteCount: number
@@ -108,6 +109,7 @@ export interface ArticleQueryParams {
 export interface HotArticleDTO {
   articleId: number
   title: string
+  type: string | null
   readCount: number
 }
 

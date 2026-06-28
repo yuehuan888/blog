@@ -14,7 +14,7 @@
         size="small"
         :bordered="false"
         class="flex-shrink-0 w-40 cursor-pointer border-l-4 border-primary-light hover:shadow-md transition-shadow"
-        @click="navigateTo(`/article/${item.articleId}`)"
+        @click="navigateTo(item.type === 'video' ? `/video/${item.articleId}` : `/article/${item.articleId}`)"
       >
         <p class="text-sm font-medium line-clamp-2 text-text-primary">{{ item.title }}</p>
         <p class="text-xs text-text-secondary mt-1">👁 {{ item.readCount }} 次阅读</p>

@@ -79,7 +79,6 @@ interface BubbleData {
   radius: number
   color: string
   rotation: number
-  borderRadius: string
 }
 
 const bubbles = ref<BubbleData[]>([])
@@ -97,13 +96,6 @@ function lighten(hex: string, amount: number): string {
   const b = parseInt(hex.slice(5, 7), 16)
   const l = (c: number) => Math.min(255, Math.round(c + (255 - c) * amount))
   return `rgb(${l(r)}, ${l(g)}, ${l(b)})`
-}
-
-/** 用种子生成不对称 border-radius，制造有机毛边 blob 形状 */
-function blobBorderRadius(seed: number): string {
-  const p = (i: number) => 38 + Math.round(seededRandom(seed * 3 + i * 7) * 28)
-  // 8 个独立百分比 → `40% 60% 55% 45% / 50% 42% 58% 48%`
-  return `${p(1)}% ${p(2)}% ${p(3)}% ${p(4)}% / ${p(5)}% ${p(6)}% ${p(7)}% ${p(8)}%`
 }
 
 // ========== 气泡布局算法 ==========
@@ -162,9 +154,8 @@ function placeBubbles(items: { tag: TagCloudItem; radius: number }[], containerW
 
     const color = PALETTE[tag.id % PALETTE.length]
     const rotation = (seededRandom(tag.id) * 6 - 3)
-    const borderRadius = blobBorderRadius(tag.id)
 
-    placed.push({ tag, x: bx, y: by, radius, color, rotation, borderRadius })
+    placed.push({ tag, x: bx, y: by, radius, color, rotation })
     placedGeom.push({ x: bx, y: by, radius })
   }
 
@@ -220,7 +211,7 @@ function computeLayout() {
 // ========== 样式生成 ==========
 
 function bubbleStyle(bubble: BubbleData, index: number) {
-  const { x, y, radius, color, rotation, borderRadius } = bubble
+  const { x, y, radius, color, rotation } = bubble
   const diameter = radius * 2
 
   const gradient = `radial-gradient(circle at 38% 32%, ${lighten(color, 0.25)}, ${color})`
@@ -232,7 +223,6 @@ function bubbleStyle(bubble: BubbleData, index: number) {
     top: `${y - radius}px`,
     background: gradient,
     rotate: `${rotation.toFixed(1)}deg`,
-    borderRadius,
     fontSize: `${Math.max(0.7, diameter / 80)}rem`,
     zIndex: Math.round(10 + rotation * 3),
   }
