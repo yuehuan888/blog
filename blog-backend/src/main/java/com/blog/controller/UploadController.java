@@ -8,8 +8,13 @@ import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
 
+import javax.imageio.ImageIO;
+import java.awt.Graphics2D;
+import java.awt.RenderingHints;
+import java.awt.image.BufferedImage;
 import java.io.File;
 import java.io.IOException;
+import java.io.InputStream;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
@@ -150,21 +155,68 @@ public class UploadController {
             Path thumbDir = Paths.get(uploadDir, "videos", "thumbnails");
             Files.createDirectories(thumbDir);
 
-            String originalName = file.getOriginalFilename();
-            String ext = ".jpg";
-            if (originalName != null && originalName.contains(".")) {
-                ext = originalName.substring(originalName.lastIndexOf("."));
+            // Read original image
+            BufferedImage original;
+            try (InputStream in = file.getInputStream()) {
+                original = ImageIO.read(in);
             }
-            String filename = "thumb_" + UUID.randomUUID().toString().substring(0, 8) + ext;
+            if (original == null) {
+                return Result.fail(400, "Unsupported image format");
+            }
 
+            // Crop to 16:9 center, then resize to 1280x720
+            BufferedImage processed = cropTo16x9(original);
+            BufferedImage resized = resizeTo(processed, 1280, 720);
+            // Let GC reclaim originals quickly
+            if (processed != original) processed.flush();
+
+            String filename = "thumb_" + UUID.randomUUID().toString().substring(0, 8) + ".jpg";
             Path filePath = thumbDir.resolve(filename);
-            file.transferTo(filePath.toFile());
+            ImageIO.write(resized, "jpg", filePath.toFile());
+            resized.flush();
 
             String url = "/uploads/videos/thumbnails/" + filename;
             return Result.ok(Map.of("url", url));
         } catch (IOException e) {
             return Result.fail(500, "Failed to save thumbnail: " + e.getMessage());
         }
+    }
+
+    /** Center-crop the image to 16:9 aspect ratio. */
+    private BufferedImage cropTo16x9(BufferedImage src) {
+        int w = src.getWidth();
+        int h = src.getHeight();
+        double targetRatio = 16.0 / 9.0;
+        double currentRatio = (double) w / h;
+
+        int cropW, cropH;
+        if (currentRatio > targetRatio) {
+            // Image wider than 16:9 — crop sides
+            cropH = h;
+            cropW = (int) Math.round(h * targetRatio);
+        } else {
+            // Image taller than 16:9 — crop top/bottom
+            cropW = w;
+            cropH = (int) Math.round(w / targetRatio);
+        }
+
+        int x = (w - cropW) / 2;
+        int y = (h - cropH) / 2;
+        return src.getSubimage(x, y, cropW, cropH);
+    }
+
+    /** Resize image to target dimensions. */
+    private BufferedImage resizeTo(BufferedImage src, int targetW, int targetH) {
+        BufferedImage result = new BufferedImage(targetW, targetH, BufferedImage.TYPE_INT_RGB);
+        Graphics2D g = result.createGraphics();
+        try {
+            g.setRenderingHint(RenderingHints.KEY_INTERPOLATION, RenderingHints.VALUE_INTERPOLATION_BILINEAR);
+            g.setRenderingHint(RenderingHints.KEY_RENDERING, RenderingHints.VALUE_RENDER_QUALITY);
+            g.drawImage(src, 0, 0, targetW, targetH, null);
+        } finally {
+            g.dispose();
+        }
+        return result;
     }
 
     private static final org.slf4j.Logger log =
