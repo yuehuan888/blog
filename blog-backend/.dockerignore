@@ -1,0 +1,4 @@
+target/*
+!target/blog-backend-1.0.0.jar
+.git
+*.md

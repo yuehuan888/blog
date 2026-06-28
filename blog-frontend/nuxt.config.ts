@@ -19,6 +19,7 @@ export default defineNuxtConfig({
 
   runtimeConfig: {
     public: {
+      // Dev default: localhost:8080 | Docker build: NUXT_PUBLIC_API_BASE= (empty → relative URLs)
       apiBase: 'http://localhost:8080',
     },
   },
