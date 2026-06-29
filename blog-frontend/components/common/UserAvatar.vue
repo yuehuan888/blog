@@ -38,7 +38,8 @@ const px = computed(() => sizeMap[props.size]?.px ?? 36)
 const fontSize = computed(() => sizeMap[props.size]?.fontSize ?? 13)
 
 // Build full URL: if relative path, prepend backend base URL
-const API_BASE = 'http://localhost:8080'
+const config = useRuntimeConfig()
+const API_BASE = (config.public.apiBase as string) || ''
 
 const realSrc = computed(() => {
   if (!props.src || props.src === 'null') return null

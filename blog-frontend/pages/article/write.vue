@@ -130,6 +130,9 @@ const tagOptions = ref<{ label: string; value: number }[]>([])
 // Map tag id to name for category derivation
 const tagNameMap = ref<Record<number, string>>({})
 
+// API base for constructing image URLs
+const apiBase = (useRuntimeConfig().public.apiBase as string) || ''
+
 // ========== 图片上传 ==========
 const uploadedImages = ref<string[]>([])
 const uploadingStates = ref<boolean[]>([])
@@ -182,7 +185,7 @@ async function handleImageSelect(e: Event) {
         .then(url => {
           uploadedImages.value[idx] = url.startsWith('http')
             ? url
-            : `http://localhost:8080${url}`
+            : `${apiBase}${url}`
           uploadingStates.value[idx] = false
         })
         .catch(err => {
@@ -212,7 +215,7 @@ function removeImage(idx: number) {
 
 function getRelativeUrls(): string[] {
   return uploadedImages.value.map(u => {
-    if (u.startsWith('http://localhost:8080')) return u.replace('http://localhost:8080', '')
+    if (apiBase && u.startsWith(apiBase)) return u.replace(apiBase, '')
     if (u.startsWith('blob:')) return ''
     return u
   }).filter(u => u && !u.startsWith('blob:'))
@@ -321,7 +324,7 @@ async function fetchArticleForEdit() {
     // Restore images
     if (article.images && article.images.length > 0) {
       uploadedImages.value = article.images.map((u: string) =>
-        u.startsWith('http') ? u : `http://localhost:8080${u}`
+        u.startsWith('http') ? u : `${apiBase}${u}`
       )
       uploadingStates.value = article.images.map(() => false)
     }

@@ -90,7 +90,8 @@
     <template v-else>
       <div class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
         <div v-for="article in publishedArticles" :key="article.id" class="relative group">
-          <ArticleCard :article="article" />
+          <ArticleCard v-if="article.type !== 'video'" :article="article" />
+          <VideoCard v-else :video="article as Video" />
           <!-- Delete button (own articles or admin) -->
           <NPopconfirm
             v-if="canDelete"
@@ -180,11 +181,13 @@ import { NCard, NButton, NPagination, NPopconfirm, NModal, NInput, useMessage } 
 import { getArticles, deleteArticle } from '~/api/modules/article'
 import { getUserProfile, toggleFollow, updateProfile, uploadAvatar } from '~/api/modules/user'
 import { useAuthStore } from '~/stores/auth'
-import type { Article, UserProfile } from '~/types'
+import type { Article, UserProfile, Video } from '~/types'
+import VideoCard from '~/components/article/VideoCard.vue'
 
 const route = useRoute()
 const authStore = useAuthStore()
 const message = useMessage()
+const apiBase = (useRuntimeConfig().public.apiBase as string) || ''
 
 const profileUserId = computed(() => Number(route.params.id))
 const profileData = ref<UserProfile | null>(null)
@@ -210,7 +213,7 @@ function openEditModal() {
   editAvatarPreview.value = profileData.value?.avatar
     ? (profileData.value.avatar.startsWith('http')
       ? profileData.value.avatar
-      : `http://localhost:8080${profileData.value.avatar}`)
+      : `${apiBase}${profileData.value.avatar}`)
     : ''
   editAvatarFile.value = null
   showEditModal.value = true

@@ -317,7 +317,8 @@ const loading = ref(true)
 const deleting = ref(false)
 const error = ref<string | null>(null)
 
-const API_BASE = 'http://localhost:8080'
+const config = useRuntimeConfig()
+const API_BASE = (config.public.apiBase as string) || ''
 
 const hasImages = computed(() => {
   return !!(article.value?.images && article.value.images.length > 0)

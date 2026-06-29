@@ -69,11 +69,16 @@ export function sendDanmaku(
 }
 
 /** Compute SHA-256 hash of a file.
- * Uses the entire file in one pass — Web Crypto handles up to ~500MB safely. */
+ * Uses Web Crypto in secure contexts (HTTPS/localhost), falls back to js-sha256 for HTTP. */
 export async function computeFileHash(file: File): Promise<string> {
   const buffer = await file.arrayBuffer()
-  const hash = await crypto.subtle.digest('SHA-256', buffer)
-  return Array.from(new Uint8Array(hash))
-    .map(b => b.toString(16).padStart(2, '0'))
-    .join('')
+  if (typeof crypto !== 'undefined' && crypto.subtle) {
+    const hash = await crypto.subtle.digest('SHA-256', buffer)
+    return Array.from(new Uint8Array(hash))
+      .map(b => b.toString(16).padStart(2, '0'))
+      .join('')
+  }
+  // Fallback for insecure contexts (e.g. HTTP dev server)
+  const { sha256 } = await import('js-sha256')
+  return sha256(new Uint8Array(buffer))
 }

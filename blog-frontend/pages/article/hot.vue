@@ -30,7 +30,7 @@
           :key="item.articleId"
           :bordered="false"
           class="cursor-pointer hover:shadow-md transition-shadow"
-          @click="navigateTo(`/article/${item.articleId}`)"
+          @click="navigateTo(item.type === 'video' ? `/video/${item.articleId}` : `/article/${item.articleId}`)"
         >
           <div class="flex items-center gap-4">
             <span

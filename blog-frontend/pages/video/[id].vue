@@ -193,7 +193,8 @@ const loading = ref(true)
 const deleting = ref(false)
 const error = ref<string | null>(null)
 
-const API_BASE = 'http://localhost:8080'
+const runtimeConfig = useRuntimeConfig()
+const API_BASE = (runtimeConfig.public.apiBase as string) || ''
 
 // Video player state
 const videoRef = ref<HTMLVideoElement | null>(null)

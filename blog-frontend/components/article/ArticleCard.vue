@@ -93,7 +93,8 @@ import { getArticleTags } from '~/api/modules/article'
 import { getUserProfile } from '~/api/modules/user'
 import type { Article, Tag, UserProfile } from '~/types'
 
-const API_BASE = 'http://localhost:8080'
+const config = useRuntimeConfig()
+const API_BASE = (config.public.apiBase as string) || ''
 
 const props = defineProps<{
   article: Article
